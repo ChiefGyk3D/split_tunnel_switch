@@ -20,7 +20,7 @@ sudo chmod +x /etc/NetworkManager/dispatcher.d/99-split-tunnel
 ### 2. Edit the Script (Optional)
 Modify the `BYPASS_SUBNETS` array in the script to include the subnets you want to bypass the VPN.
 ```bash
-BYPASS_SUBNETS=("192.168.x.0/24" "192.168.y.0/24")
+BYPASS_SUBNETS=("192.168.1.0/24" "192.168.2.0/24")
 ```
 
 ### 3. Restart NetworkManager
