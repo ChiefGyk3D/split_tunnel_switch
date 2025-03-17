@@ -2,7 +2,7 @@
 
 This script enables split tunneling by allowing specified subnets to bypass a VPN connection. It is designed to be used with **NetworkManager** and should be placed in `/etc/NetworkManager/dispatcher.d/99-split-tunnel` for automatic execution when network changes occur.
 
-However, you can also optionally run this script manually whenever you like it you don't want to do it automatically.
+However, you can also optionally run this script manually if you don't want to do it automatically.
 ## 📌 Features
 - Automatically detects the active network interface and default gateway.
 - Routes specific subnets outside of the VPN.
