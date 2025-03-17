@@ -13,8 +13,8 @@ This script enables split tunneling by allowing specified subnets to bypass a VP
 Move the script to the NetworkManager dispatcher directory and make it executable:
 
 ```bash
-sudo mv 99-split-tunnel /etc/NetworkManager/dispatcher.d/
-sudo chmod +x /etc/NetworkManager/dispatcher.d/99-split-tunnel
+sudo mv split_tunnel.sh /etc/NetworkManager/dispatcher.d/split_tunnel
+sudo chmod +x /etc/NetworkManager/dispatcher.d/split_tunnel
 ```
 
 ### 2. Edit the Script (Optional)
