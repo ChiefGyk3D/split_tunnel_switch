@@ -2,7 +2,7 @@
 #for auto switching place in /etc/NetworkManager/dispatcher.d/99-split-tunnel
 
 # Define the subnets that should bypass the VPN
-BYPASS_SUBNETS=("192.168.211.0/24" "192.168.208.0/24")
+BYPASS_SUBNETS=("192.168.1.0/24" "192.168.2.0/24")
 
 # Find the default route that is NOT through the VPN (tun0)
 read DEFAULT_ROUTE DEFAULT_INTERFACE <<< $(ip route show default | grep -v tun0 | awk 'NR==1 {print $3, $5}')
