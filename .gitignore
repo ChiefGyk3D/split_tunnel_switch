@@ -1,0 +1,18 @@
+.git/
+*.backup
+*.bak
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Lock files
+*.lock

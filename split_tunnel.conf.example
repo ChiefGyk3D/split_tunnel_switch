@@ -1,0 +1,39 @@
+# NetworkManager Split Tunnel Configuration
+# Copy this file to /etc/split_tunnel/split_tunnel.conf and customize
+
+# Define the subnets that should bypass the VPN
+# These subnets will be routed through your regular gateway instead of the VPN
+# Format: BYPASS_SUBNETS=("subnet1" "subnet2" "subnet3")
+# Examples:
+#   - Local network: "192.168.1.0/24"
+#   - Private network range: "10.0.0.0/8"
+#   - Specific device: "192.168.1.100/32"
+BYPASS_SUBNETS=("192.168.1.0/24" "192.168.2.0/24")
+
+# VPN interface to exclude from routing
+# This is typically the interface created by your VPN client
+# Common values:
+#   - OpenVPN: "tun0" or "tap0"
+#   - WireGuard: "wg0"
+#   - IPsec: "ipsec0"
+VPN_INTERFACE="tun0"
+
+# Enable logging to /var/log/split_tunnel.log
+# Set to "true" to enable logging, "false" to disable
+# Logs include route additions, removals, and any errors
+ENABLE_LOGGING="true"
+
+# Dry run mode (for testing without making changes)
+# When set to "true", the script will show what it would do without actually
+# modifying any routes. Useful for testing configuration.
+# Set to "false" for normal operation
+DRY_RUN="false"
+
+# Additional custom settings can be added below
+# These variables will be available in the split_tunnel.sh script
+
+# Example: Custom log file location
+# LOG_FILE="/var/log/my_custom_split_tunnel.log"
+
+# Example: Custom lock file location
+# LOCK_FILE="/var/run/my_split_tunnel.lock"
