@@ -1,0 +1,30 @@
+# Systemd timer for split tunnel route persistence
+# Install to: /etc/systemd/system/split-tunnel-persist.timer
+#
+# This timer periodically triggers split-tunnel-persist.service to
+# re-verify and restore split tunnel routes. This catches cases where:
+#   - VPN client re-pushes routes and overwrites bypass entries
+#   - Network changes are not caught by the dispatcher
+#   - Routes are flushed by other system components
+#
+# Default: runs every 5 minutes. Adjust OnUnitActiveSec to change frequency.
+
+[Unit]
+Description=Periodically verify and restore split tunnel routes
+Documentation=https://github.com/ChiefGyk3D/split_tunnel_switch
+
+[Timer]
+# Run 60 seconds after boot
+OnBootSec=60
+
+# Then every 5 minutes
+OnUnitActiveSec=5min
+
+# Randomize start time by up to 30 seconds to avoid thundering herd
+RandomizedDelaySec=30
+
+# Keep the timer persistent across reboots
+Persistent=true
+
+[Install]
+WantedBy=timers.target

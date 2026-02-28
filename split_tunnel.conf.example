@@ -1,39 +1,260 @@
+# =============================================================================
 # NetworkManager Split Tunnel Configuration
-# Copy this file to /etc/split_tunnel/split_tunnel.conf and customize
+# =============================================================================
+# Copy this file to /etc/split_tunnel/split_tunnel.conf and customize.
+# All settings are optional — defaults are shown in comments beside each key.
+#
+# Format rules:
+#   - Lines beginning with # are comments
+#   - Scalar values:  KEY="value"
+#   - Array values:   KEY=("val1" "val2" "val3")
+#   - Blank lines are ignored
+#
+# This file is parsed safely — it is NOT sourced/eval'd by the script.
+# Only recognized keys are loaded; unknown keys are silently ignored.
+# =============================================================================
 
-# Define the subnets that should bypass the VPN
-# These subnets will be routed through your regular gateway instead of the VPN
-# Format: BYPASS_SUBNETS=("subnet1" "subnet2" "subnet3")
+# =============================================================================
+# TUNNEL MODE
+# =============================================================================
+# Controls the overall routing strategy.
+#
+#   "bypass"  (default) — The listed subnets BYPASS the VPN and are routed
+#                          through your physical gateway. All other traffic
+#                          continues through the VPN. Best for accessing local
+#                          devices (NAS, printers, IoT) while connected to VPN.
+#
+#   "include"           — ONLY the listed subnets are routed through the VPN.
+#                          Everything else goes through the physical gateway.
+#                          Best for corporate VPNs where only work resources
+#                          need the tunnel.
+#
+TUNNEL_MODE="bypass"
+
+# =============================================================================
+# BYPASS SUBNETS — IPv4
+# =============================================================================
+# Subnets to bypass the VPN (in bypass mode) or route through the VPN
+# (in include mode). Use CIDR notation.
+#
 # Examples:
-#   - Local network: "192.168.1.0/24"
-#   - Private network range: "10.0.0.0/8"
-#   - Specific device: "192.168.1.100/32"
+#   Single home network:       ("192.168.1.0/24")
+#   Multiple networks:         ("192.168.1.0/24" "192.168.2.0/24" "10.0.0.0/24")
+#   All RFC-1918 private:      ("10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16")
+#   Specific host:             ("192.168.1.100/32")
+#
+# Validation: each entry must be a valid IPv4 address with prefix 0-32.
+#             Invalid entries are skipped with an error log.
+#
 BYPASS_SUBNETS=("192.168.1.0/24" "192.168.2.0/24")
 
-# VPN interface to exclude from routing
-# This is typically the interface created by your VPN client
-# Common values:
-#   - OpenVPN: "tun0" or "tap0"
-#   - WireGuard: "wg0"
-#   - IPsec: "ipsec0"
-VPN_INTERFACE="tun0"
+# =============================================================================
+# BYPASS SUBNETS — IPv6
+# =============================================================================
+# Same purpose as BYPASS_SUBNETS but for IPv6 networks. Leave empty if your
+# local network is IPv4-only.
+#
+# Examples:
+#   Home ULA:                  ("fd00::/48")
+#   Specific /64:              ("2001:db8:abcd:1234::/64")
+#
+BYPASS_SUBNETS_V6=()
 
-# Enable logging to /var/log/split_tunnel.log
-# Set to "true" to enable logging, "false" to disable
-# Logs include route additions, removals, and any errors
+# =============================================================================
+# VPN INTERFACES
+# =============================================================================
+# Network interfaces created by your VPN client(s). Supports multiple
+# interfaces for multi-VPN setups.
+#
+# Common values:
+#   OpenVPN          →  "tun0" or "tap0"
+#   WireGuard        →  "wg0"
+#   IPsec / IKEv2    →  "ipsec0"
+#   PPTP             →  "ppp0"
+#   Cisco AnyConnect →  "cscotun0"
+#   Tailscale        →  "tailscale0"
+#   Mullvad          →  "wg-mullvad"
+#
+# Single VPN:
+#   VPN_INTERFACES=("tun0")
+# Multiple simultaneous VPNs:
+#   VPN_INTERFACES=("tun0" "wg0")
+#
+# Backwards-compatible: you can still use the legacy scalar form:
+#   VPN_INTERFACE="tun0"
+# It will be converted to VPN_INTERFACES=("tun0") internally.
+#
+VPN_INTERFACES=("tun0")
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+# Enable or disable logging to file. Logs include route additions, removals,
+# errors, and dispatcher events with timestamps.
+#
+# ENABLE_LOGGING="true"   (default) — write to LOG_FILE
+# ENABLE_LOGGING="false"  — no file logging (terminal output still works)
+#
 ENABLE_LOGGING="true"
 
-# Dry run mode (for testing without making changes)
-# When set to "true", the script will show what it would do without actually
-# modifying any routes. Useful for testing configuration.
-# Set to "false" for normal operation
+# Log file path. Must be writable by root.
+# Default: /var/log/split_tunnel.log
+# A logrotate config is provided in extras/logrotate.d/split_tunnel
+#
+# LOG_FILE="/var/log/split_tunnel.log"
+
+# =============================================================================
+# VERBOSE / DEBUG OUTPUT
+# =============================================================================
+# When "true", prints detailed DEBUG messages to the terminal (and log file).
+# Useful for troubleshooting. Can also be enabled per-invocation with -v flag.
+#
+# VERBOSE="false"
+#
+VERBOSE="false"
+
+# =============================================================================
+# DRY RUN MODE
+# =============================================================================
+# When "true", the script shows what it would do without modifying any routes
+# or firewall rules. Useful for testing configuration changes.
+# Can also be triggered with the 'test' command or -n flag.
+#
+# DRY_RUN="false"
+#
 DRY_RUN="false"
 
-# Additional custom settings can be added below
-# These variables will be available in the split_tunnel.sh script
+# =============================================================================
+# LOCK FILE
+# =============================================================================
+# Prevents concurrent execution when called by multiple dispatcher events.
+# Default: /var/run/split_tunnel.lock
+#
+# LOCK_FILE="/var/run/split_tunnel.lock"
 
-# Example: Custom log file location
-# LOG_FILE="/var/log/my_custom_split_tunnel.log"
+# =============================================================================
+# ROUTE METRIC (PRIORITY)
+# =============================================================================
+# Optional numeric metric for added routes. Lower values = higher priority.
+# Leave empty to use the system default.
+#
+# Examples:
+#   ROUTE_METRIC="100"   — high priority
+#   ROUTE_METRIC="500"   — medium priority
+#   ROUTE_METRIC=""       — system default (no metric set)
+#
+# Range: 0-9999
+#
+ROUTE_METRIC=""
 
-# Example: Custom lock file location
-# LOCK_FILE="/var/run/my_split_tunnel.lock"
+# =============================================================================
+# CONNECTIVITY VERIFICATION
+# =============================================================================
+# After adding routes, optionally ping specific hosts to verify reachability.
+# If any host is unreachable, a warning is logged (and a desktop notification
+# sent if DESKTOP_NOTIFICATIONS is enabled).
+#
+# VERIFY_CONNECTIVITY="true"   — enable post-route ping check
+# VERIFY_CONNECTIVITY="false"  — skip verification (default)
+#
+VERIFY_CONNECTIVITY="false"
+
+# Hosts to ping for verification. If empty and VERIFY_CONNECTIVITY is true,
+# the default gateway IP is used.
+#
+# Examples:
+#   VERIFY_HOSTS=("192.168.1.1" "192.168.1.100")
+#   VERIFY_HOSTS=("nas.local" "printer.local")
+#
+VERIFY_HOSTS=()
+
+# =============================================================================
+# AUTO-DISCOVER LOCAL SUBNETS
+# =============================================================================
+# Automatically detect subnets on physical (non-VPN) interfaces and add them
+# to the bypass list. Discovered subnets are merged with BYPASS_SUBNETS
+# (duplicates are skipped).
+#
+# This is useful when your network configuration changes frequently or you
+# connect to different LANs.
+#
+# AUTO_DISCOVER_SUBNETS="true"  — auto-discover and merge
+# AUTO_DISCOVER_SUBNETS="false" — use only configured subnets (default)
+#
+AUTO_DISCOVER_SUBNETS="false"
+
+# =============================================================================
+# KILL SWITCH
+# =============================================================================
+# When enabled, blocks all outgoing traffic that doesn't go through:
+#   1. A VPN interface listed in VPN_INTERFACES
+#   2. A bypass subnet in BYPASS_SUBNETS / BYPASS_SUBNETS_V6
+#   3. Loopback (lo)
+#   4. Established connections
+#   5. DHCP (ports 67-68)
+#   6. Allowed DNS servers (if DNS_LEAK_PREVENTION is enabled)
+#
+# This prevents accidental traffic leaks if the VPN drops.
+#
+# KILL_SWITCH="true"    — enable kill switch
+# KILL_SWITCH="false"   — no firewall rules (default)
+#
+KILL_SWITCH="false"
+
+# Firewall backend for the kill switch.
+#
+#   "iptables"  (default) — uses iptables/ip6tables (works on most systems)
+#   "nftables"            — uses nft (modern replacement for iptables)
+#
+# The script creates a dedicated chain/table that is cleanly removed on
+# 'remove' or 'kill-switch-off'.
+#
+KILL_SWITCH_BACKEND="iptables"
+
+# =============================================================================
+# DNS LEAK PREVENTION
+# =============================================================================
+# Routes DNS traffic for specified servers through the physical gateway,
+# preventing DNS queries from leaking through the VPN when accessing
+# bypass subnets.
+#
+# DNS_LEAK_PREVENTION="true"    — add /32 routes for DNS servers
+# DNS_LEAK_PREVENTION="false"   — no DNS-specific routing (default)
+#
+DNS_LEAK_PREVENTION="false"
+
+# DNS servers to route through the physical (non-VPN) interface.
+# If empty and DNS_LEAK_PREVENTION is enabled, the default gateway is used.
+#
+# Examples:
+#   Local router DNS:     ("192.168.1.1")
+#   Cloudflare + Google:  ("1.1.1.1" "8.8.8.8")
+#   Pi-hole / AdGuard:    ("192.168.1.53")
+#
+DIRECT_DNS_SERVERS=()
+
+# =============================================================================
+# VPN-DOWN ROUTE CLEANUP
+# =============================================================================
+# Controls whether split tunnel routes are automatically removed when the VPN
+# disconnects (vpn-down event from NetworkManager dispatcher).
+#
+# REMOVE_ROUTES_ON_VPN_DOWN="true"   — clean up routes on VPN disconnect
+# REMOVE_ROUTES_ON_VPN_DOWN="false"  — keep routes (default, routes harmless
+#                                       without VPN and may aid reconnection)
+#
+REMOVE_ROUTES_ON_VPN_DOWN="false"
+
+# =============================================================================
+# DESKTOP NOTIFICATIONS
+# =============================================================================
+# Send desktop notifications via notify-send when routes change or errors
+# occur. When running as root (e.g., via dispatcher), the script attempts
+# to send notifications to the currently logged-in user's D-Bus session.
+#
+# Requires: notify-send (usually from libnotify-bin or libnotify)
+#
+# DESKTOP_NOTIFICATIONS="true"   — send notifications
+# DESKTOP_NOTIFICATIONS="false"  — silent operation (default)
+#
+DESKTOP_NOTIFICATIONS="false"

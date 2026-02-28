@@ -1,0 +1,29 @@
+# Systemd service for split tunnel route persistence
+# Install to: /etc/systemd/system/split-tunnel-persist.service
+#
+# This service re-applies split tunnel routes. It is triggered by
+# the companion timer (split-tunnel-persist.timer) to periodically
+# verify and restore routes that may have been overwritten by VPN
+# client route pushes or network changes.
+
+[Unit]
+Description=Re-apply NetworkManager Split Tunnel Routes
+Documentation=https://github.com/ChiefGyk3D/split_tunnel_switch
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/etc/NetworkManager/dispatcher.d/99-split-tunnel add
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/split_tunnel.log /var/run/split_tunnel.lock /etc/split_tunnel
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,194 +1,98 @@
 # Project Structure
 
+Overview of all files and directories in the Split Tunnel Switch project (v3.0.0).
+
 ```
 split_tunnel_switch/
-├── split_tunnel.sh              # Main script with split tunneling logic
-├── setup.sh                     # Interactive installation wizard
-├── split_tunnel.conf.example    # Configuration file template
-├── README.md                    # Comprehensive documentation
-├── QUICKSTART.md               # Quick start guide
-├── CONTRIBUTING.md             # Contribution guidelines
-├── CHANGELOG.md                # Version history and changes
-├── LICENSE                     # GPL v3 license
-└── .gitignore                  # Git ignore rules
-
-After Installation:
-/etc/
-├── NetworkManager/
-│   └── dispatcher.d/
-│       └── 99-split-tunnel     # Installed main script (auto-runs)
-└── split_tunnel/
-    └── split_tunnel.conf       # Active configuration file
-
-/var/log/
-└── split_tunnel.log            # Log file with all operations
-
-/var/run/
-└── split_tunnel.lock           # Lock file (temporary, when running)
+├── split_tunnel.sh              # Main split tunnel script (dispatcher)
+├── split_tunnel.conf            # Active config (created by setup.sh; gitignored)
+├── split_tunnel.conf.example    # Documented config template
+├── setup.sh                     # Interactive setup / management tool
+├── README.md                    # Full documentation
+├── QUICKSTART.md                # 5-minute getting-started guide
+├── CHANGELOG.md                 # Version history
+├── CONTRIBUTING.md              # Contributor guidelines
+├── PROJECT_STRUCTURE.md         # This file
+├── LICENSE                      # GPLv3 license
+├── extras/                      # Optional infrastructure files
+│   ├── logrotate.d/
+│   │   └── split_tunnel         # Logrotate config for /var/log/split_tunnel.log
+│   └── systemd/
+│       ├── split-tunnel-persist.service   # Oneshot service to re-apply routes
+│       └── split-tunnel-persist.timer     # Timer triggering every 5 minutes
+└── tests/
+    └── run_tests.sh             # Test suite (lint, unit, integration)
 ```
 
 ## File Descriptions
 
 ### Core Scripts
 
-**`split_tunnel.sh`** (Main Script)
-- Core split tunneling functionality
-- Route management (add/remove/status)
-- NetworkManager dispatcher integration
-- Configuration file support
-- Logging system
-- Lock file mechanism
-- Dry-run testing mode
-
-**`setup.sh`** (Installation Script)
-- Interactive installation wizard
-- Configuration helper
-- Quick install mode
-- Uninstallation
-- Status checking
-- Testing utilities
+| File | Purpose |
+|------|---------|
+| `split_tunnel.sh` | Main script. Installed to `/etc/NetworkManager/dispatcher.d/99-split-tunnel`. Handles route management, kill switch, DNS leak prevention, auto-discovery, connectivity checks, and desktop notifications. ~750 lines. |
+| `setup.sh` | Interactive installer and management tool. Handles install, uninstall, configuration, validation, and test execution. ~450 lines. |
 
 ### Configuration
 
-**`split_tunnel.conf.example`**
-- Configuration template
-- Documented settings
-- Example subnets
-- Common VPN interfaces
-- Best practices
+| File | Purpose |
+|------|---------|
+| `split_tunnel.conf.example` | Comprehensive config template with per-setting documentation. Covers all options: tunnel mode, subnets (v4+v6), VPN interfaces, kill switch, DNS leak prevention, auto-discovery, connectivity, notifications, metrics, logging, and more. |
+| `split_tunnel.conf` | User's active config (created by setup or manually). Not tracked in git. Installed to `/etc/split_tunnel/split_tunnel.conf`. |
 
 ### Documentation
 
-**`README.md`**
-- Project overview
-- Features and benefits
-- Complete installation guide
-- Configuration examples
-- Usage instructions
-- Troubleshooting guide
-- FAQ section
-- Architecture explanation
+| File | Purpose |
+|------|---------|
+| `README.md` | Full project documentation: features, installation, configuration, usage, architecture, troubleshooting, FAQ. |
+| `QUICKSTART.md` | Minimal 5-minute setup guide with the essential steps and commands. |
+| `CHANGELOG.md` | Version-by-version list of additions, changes, removals, and migration notes. |
+| `CONTRIBUTING.md` | Guidelines for contributors: development setup, coding standards, testing requirements, PR process. |
+| `PROJECT_STRUCTURE.md` | This file. Maps every file and directory with descriptions. |
+| `LICENSE` | GNU General Public License v3.0. |
 
-**`QUICKSTART.md`**
-- Fast setup guide
-- Common configurations
-- Basic troubleshooting
-- Daily usage examples
+### Extras
 
-**`CONTRIBUTING.md`**
-- Contribution guidelines
-- Development setup
-- Coding standards
-- Testing procedures
-- PR process
-- Commit message format
+| File | Purpose |
+|------|---------|
+| `extras/logrotate.d/split_tunnel` | Logrotate configuration: weekly rotation, 4 copies retained, gzip compression, `copytruncate` for seamless rotation. Installed to `/etc/logrotate.d/split_tunnel`. |
+| `extras/systemd/split-tunnel-persist.service` | Systemd oneshot service that runs `99-split-tunnel add` to re-apply routes. Includes security hardening (`ProtectSystem`, `ProtectHome`, `PrivateTmp`). |
+| `extras/systemd/split-tunnel-persist.timer` | Systemd timer that triggers the service: 60s after boot, then every 5 minutes with randomized 30s delay. Installed to `/etc/systemd/system/`. |
 
-**`CHANGELOG.md`**
-- Version history
-- Feature additions
-- Bug fixes
-- Breaking changes
+### Tests
 
-### System Files (After Installation)
+| File | Purpose |
+|------|---------|
+| `tests/run_tests.sh` | Test suite with three categories: **lint** (shellcheck on all .sh files), **unit** (CIDR validation, config parsing, version/help output), **integration** (dry-run, validate, status, discover via the installed script — requires root). ~350 lines. |
 
-**`/etc/NetworkManager/dispatcher.d/99-split-tunnel`**
-- Installed copy of split_tunnel.sh
-- Automatically executed by NetworkManager on network events
-- Can also be run manually
+## Installation Paths
 
-**`/etc/split_tunnel/split_tunnel.conf`**
-- Active configuration
-- User-customized settings
-- Loaded by main script on each run
+When installed via `setup.sh`, files are placed at:
 
-**`/var/log/split_tunnel.log`**
-- Operation log
-- Error messages
-- Success confirmations
-- Timestamped entries
+| Source | Destination |
+|--------|-------------|
+| `split_tunnel.sh` | `/etc/NetworkManager/dispatcher.d/99-split-tunnel` |
+| `split_tunnel.conf` or `.example` | `/etc/split_tunnel/split_tunnel.conf` |
+| `extras/logrotate.d/split_tunnel` | `/etc/logrotate.d/split_tunnel` |
+| `extras/systemd/*.service` | `/etc/systemd/system/split-tunnel-persist.service` |
+| `extras/systemd/*.timer` | `/etc/systemd/system/split-tunnel-persist.timer` |
+| log output | `/var/log/split_tunnel.log` |
+| lock file | `/var/run/split_tunnel.lock` |
 
-**`/var/run/split_tunnel.lock`**
-- Temporary lock file
-- Prevents concurrent execution
-- Contains PID of running instance
-- Automatically removed when script exits
-
-## Key Features by File
-
-### split_tunnel.sh
-- ✅ Add/remove/status commands
-- ✅ Configuration file support
-- ✅ Comprehensive error handling
-- ✅ Colorized output
-- ✅ Detailed logging
-- ✅ Lock file protection
-- ✅ Dry-run mode
-- ✅ NetworkManager dispatcher support
-
-### setup.sh
-- ✅ Interactive subnet configuration
-- ✅ VPN interface detection
-- ✅ Automatic backup of existing config
-- ✅ Prerequisites checking
-- ✅ Configuration testing
-- ✅ Clean uninstallation
-- ✅ Status reporting
-- ✅ Quick install mode
-
-### Documentation Suite
-- ✅ Beginner-friendly quick start
-- ✅ Comprehensive README
-- ✅ Development guidelines
-- ✅ Version tracking
-- ✅ FAQ and troubleshooting
-- ✅ Architecture diagrams
-- ✅ Code examples
-
-## Workflow
+## Architecture Overview
 
 ```
-User runs setup.sh
-    ↓
-Interactive Configuration
-    ↓
-Creates /etc/split_tunnel/split_tunnel.conf
-    ↓
-Installs split_tunnel.sh → /etc/NetworkManager/dispatcher.d/99-split-tunnel
-    ↓
-NetworkManager detects network changes
-    ↓
-Automatically runs 99-split-tunnel
-    ↓
-Script reads configuration
-    ↓
-Adds bypass routes
-    ↓
-Logs operations → /var/log/split_tunnel.log
-```
-
-## Maintenance
-
-### Update Configuration
-1. Edit `/etc/split_tunnel/split_tunnel.conf`
-2. Run: `sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel test`
-3. Apply: `sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel add`
-
-### View Logs
-```bash
-tail -f /var/log/split_tunnel.log
-```
-
-### Check Status
-```bash
-sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel status
-```
-
-### Reinstall/Update
-```bash
-sudo ./setup.sh install
-```
-
-### Uninstall
-```bash
-sudo ./setup.sh uninstall
+User / NetworkManager
+        │
+        ▼
+99-split-tunnel (dispatcher script)
+        │
+        ├── load_config()          Safe line-by-line config parsing
+        ├── validate_config()      Pre-flight checks
+        ├── discover_subnets()     Auto-detect LAN (optional)
+        ├── add_routes_v4/v6()     Route management
+        ├── setup_dns_leak()       DNS /32 routes (optional)
+        ├── enable_kill_switch()   iptables/nftables (optional)
+        ├── verify_connectivity()  Post-route ping checks (optional)
+        └── send_notification()    Desktop alerts (optional)
 ```

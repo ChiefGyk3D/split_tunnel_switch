@@ -1,405 +1,245 @@
-# Contributing to NetworkManager Split Tunneling Script
+# Contributing to Split Tunnel Switch
 
-First off, thank you for considering contributing to this project! It's people like you that make this tool better for everyone.
+Thank you for your interest in contributing! This guide covers everything you need to get started.
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
+- [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
-- [Testing Guidelines](#testing-guidelines)
-- [Submitting Changes](#submitting-changes)
-- [Reporting Bugs](#reporting-bugs)
-- [Suggesting Enhancements](#suggesting-enhancements)
+- [Testing](#testing)
+- [Pull Request Process](#pull-request-process)
+- [Reporting Issues](#reporting-issues)
 
-## 📜 Code of Conduct
+## Code of Conduct
 
-This project and everyone participating in it is governed by a code of mutual respect. By participating, you are expected to uphold this code. Please:
+Be respectful and constructive. We follow the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 
-- Use welcoming and inclusive language
-- Be respectful of differing viewpoints and experiences
-- Gracefully accept constructive criticism
-- Focus on what is best for the community
-- Show empathy towards other community members
+## Getting Started
 
-## 🤝 How Can I Contribute?
+1. Fork the repository
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/split_tunnel_switch.git
+   cd split_tunnel_switch
+   ```
+3. Create a feature branch:
+   ```bash
+   git checkout -b feature/your-feature
+   ```
+4. Make your changes
+5. Run the test suite
+6. Commit and push
+7. Open a pull request
 
-### Reporting Bugs
-
-Before creating bug reports, please check the [existing issues](https://github.com/ChiefGyk3D/split_tunnel_switch/issues) to avoid duplicates.
-
-When creating a bug report, please include:
-
-- **Clear title and description**
-- **Steps to reproduce** the behavior
-- **Expected behavior** vs actual behavior
-- **System information**:
-  - Linux distribution and version
-  - NetworkManager version: `NetworkManager --version`
-  - Bash version: `bash --version`
-  - VPN client and version
-- **Relevant logs**: `/var/log/split_tunnel.log`
-- **Configuration**: Sanitized copy of your config file
-- **Network setup**: Output of `ip route show` and `ip addr show`
-
-**Example Bug Report:**
-
-```markdown
-### Bug: Routes not persisting after VPN reconnection
-
-**Description:**
-Split tunnel routes are added successfully but disappear when VPN reconnects.
-
-**Steps to Reproduce:**
-1. Connect to VPN
-2. Verify routes with `ip route show`
-3. Disconnect and reconnect VPN
-4. Routes are missing
-
-**Expected:** Routes should be re-added automatically
-
-**System Info:**
-- Ubuntu 22.04 LTS
-- NetworkManager 1.36.6
-- OpenVPN 2.5.5
-
-**Logs:**
-[Attach relevant log entries]
-```
-
-### Suggesting Enhancements
-
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
-
-- **Clear title and description** of the feature
-- **Use case**: Explain why this would be useful
-- **Current behavior** vs proposed behavior
-- **Possible implementation** (if you have ideas)
-- **Alternative solutions** you've considered
-
-### Pull Requests
-
-We actively welcome your pull requests:
-
-1. Fork the repo and create your branch from `main`
-2. Make your changes
-3. Test your changes thoroughly
-4. Update documentation if needed
-5. Ensure your code follows our style guidelines
-6. Submit a pull request
-
-## 🔧 Development Setup
+## Development Setup
 
 ### Prerequisites
 
+- Linux with NetworkManager
+- Bash 4.0+
+- `shellcheck` (for lint tests)
+- `ip`, `awk`, `grep` (standard utilities)
+- Root/sudo access (for integration tests)
+
+### Install shellcheck
+
 ```bash
-# Install required tools
-sudo apt-get install shellcheck shfmt  # Ubuntu/Debian
-# or
-sudo dnf install ShellCheck shfmt      # Fedora
-# or
-sudo pacman -S shellcheck shfmt        # Arch
+# Debian/Ubuntu
+sudo apt install shellcheck
+
+# Fedora
+sudo dnf install ShellCheck
+
+# Arch
+sudo pacman -S shellcheck
 ```
 
-### Setting Up Development Environment
+### Project Layout
+
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for the full directory map.
+
+Key files to know:
+
+| File | What it does |
+|------|-------------|
+| `split_tunnel.sh` | Main dispatcher script (~750 lines) |
+| `setup.sh` | Interactive installer (~450 lines) |
+| `split_tunnel.conf.example` | Config template with docs |
+| `tests/run_tests.sh` | Test suite (~350 lines) |
+
+## Coding Standards
+
+### Shell Script Style
+
+- **Shebang**: `#!/usr/bin/env bash`
+- **Strict mode**: `set -euo pipefail` at the top of every script
+- **Indentation**: 4 spaces (no tabs)
+- **Quoting**: Always quote variables: `"$var"`, not `$var`
+- **Functions**: Use `function_name() { ... }` style
+- **Local variables**: Declare with `local` inside functions
+- **Naming**: `UPPER_CASE` for constants/config, `lower_case` for local variables and functions
+- **Comments**: Use `#` with a space; explain *why*, not *what*
+
+### Config Parsing Rules
+
+The config parser is intentionally restrictive for security:
+
+- **Never** use `source` or `eval` to load config
+- All config values are parsed via `_assign_scalar` and `_assign_array` helpers
+- Only explicitly allowlisted keys are accepted
+- Adding a new config key requires updating:
+  1. The parser's `case` statement in `load_config()`
+  2. The defaults section at the top of `split_tunnel.sh`
+  3. The `validate_config()` function
+  4. The `split_tunnel.conf.example` template
+  5. The README configuration section
+
+### Error Handling
+
+- Use `log_msg` for all output (supports ERROR, WARN, INFO, DEBUG levels)
+- Critical failures should call `exit 1` with an error message
+- Non-critical issues should `log_msg WARN` and continue
+- Lock files must be cleaned up via trap on exit
+
+## Testing
+
+### Running Tests
 
 ```bash
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/split_tunnel_switch.git
-cd split_tunnel_switch
-
-# Create a development branch
-git checkout -b feature/your-feature-name
-
-# Make the scripts executable
-chmod +x split_tunnel.sh setup.sh
-```
-
-### Testing Your Changes
-
-```bash
-# Run shellcheck for syntax and best practices
-shellcheck split_tunnel.sh setup.sh
-
-# Format code consistently
-shfmt -w -i 4 -bn -ci -sr split_tunnel.sh setup.sh
-
-# Test in dry-run mode
-sudo ./split_tunnel.sh test
-
-# Test installation (in a VM or test system)
-sudo ./setup.sh quick-install
-
-# Verify functionality
-sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel status
-```
-
-## 📝 Coding Standards
-
-### Shell Script Style Guide
-
-We follow the [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html) with some modifications:
-
-#### General Rules
-
-- Use 4 spaces for indentation (not tabs)
-- Maximum line length: 100 characters
-- Use `#!/bin/bash` shebang (not `#!/bin/sh`)
-- Always use `set -euo pipefail` for safety
-- Quote all variables: `"$variable"` not `$variable`
-- Use `[[` instead of `[` for conditionals
-- Prefer functions over inline code
-
-#### Naming Conventions
-
-```bash
-# Constants: UPPER_CASE
-readonly CONFIG_FILE="/etc/split_tunnel/split_tunnel.conf"
-
-# Global variables: UPPER_CASE
-BYPASS_SUBNETS=()
-
-# Local variables: lower_case
-local subnet_count=0
-
-# Functions: lower_case_with_underscores
-function add_route() {
-    local subnet="$1"
-    # implementation
-}
-
-# Private/internal functions: _prefixed
-function _validate_subnet() {
-    # implementation
-}
-```
-
-#### Error Handling
-
-```bash
-# Always check command success
-if ! ip route add "$subnet" via "$gateway"; then
-    log_message "ERROR" "Failed to add route"
-    return 1
-fi
-
-# Use meaningful error messages
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    log_message "ERROR" "Configuration file not found: $CONFIG_FILE"
-    exit 1
-fi
-
-# Provide actionable guidance
-print_error "VPN interface $VPN_INTERFACE not found"
-print_info "Run 'ip link show' to list available interfaces"
-```
-
-#### Comments
-
-```bash
-# Good: Explain WHY, not WHAT
-# Acquire lock to prevent race conditions when called by multiple dispatcher events
-acquire_lock
-
-# Avoid: Obvious comments
-# Loop through subnets
-for subnet in "${BYPASS_SUBNETS[@]}"; do
-```
-
-#### Functions
-
-```bash
-# Good: Single responsibility, clear purpose
-add_route() {
-    local subnet="$1"
-    local gateway="$2"
-    local interface="$3"
-    
-    if ip route add "$subnet" via "$gateway" dev "$interface" 2>/dev/null; then
-        log_message "SUCCESS" "Added route for $subnet"
-        return 0
-    else
-        log_message "ERROR" "Failed to add route for $subnet"
-        return 1
-    fi
-}
-
-# Document complex functions
-# Validates CIDR notation subnet format
-# Arguments:
-#   $1 - Subnet in CIDR notation (e.g., 192.168.1.0/24)
-# Returns:
-#   0 if valid, 1 if invalid
-validate_subnet() {
-    local subnet="$1"
-    # implementation
-}
-```
-
-### Configuration File Standards
-
-- Use descriptive variable names
-- Include comments explaining each option
-- Provide examples in comments
-- Use sensible defaults
-
-## 🧪 Testing Guidelines
-
-### Manual Testing Checklist
-
-Before submitting a PR, test the following scenarios:
-
-- [ ] Fresh installation on clean system
-- [ ] Installation with existing config (upgrade scenario)
-- [ ] Adding routes manually
-- [ ] Removing routes manually
-- [ ] Status command shows correct information
-- [ ] Dry-run mode doesn't modify routes
-- [ ] Automatic operation via NetworkManager dispatcher
-- [ ] VPN connection/disconnection handling
-- [ ] Network interface switching (Wi-Fi to Ethernet)
-- [ ] Multiple subnet configurations
-- [ ] Invalid configuration handling
-- [ ] Permission errors (non-root execution)
-- [ ] Concurrent execution prevention (lock file)
-- [ ] Log file creation and writing
-- [ ] Uninstallation completely removes all files
-
-### Test Environments
-
-Please test on at least one of:
-
-- Ubuntu LTS (20.04 or newer)
-- Debian Stable
-- Fedora (latest)
-- Arch Linux
-
-### Automated Testing
-
-We're working on automated tests. Check the `tests/` directory for available test scripts.
-
-```bash
-# Run all tests
+# All tests
 ./tests/run_tests.sh
 
-# Run specific test
-./tests/test_route_addition.sh
+# Specific category
+./tests/run_tests.sh lint          # shellcheck on all .sh files
+./tests/run_tests.sh unit          # CIDR validation, config parsing, CLI output
+./tests/run_tests.sh integration   # Requires root; tests against installed script
 ```
 
-## 📤 Submitting Changes
+### Test Categories
+
+#### Lint Tests
+- Runs `shellcheck` on `split_tunnel.sh`, `setup.sh`, and `tests/run_tests.sh`
+- All scripts must pass with zero warnings or errors
+
+#### Unit Tests
+- IPv4 CIDR validation (valid and invalid cases)
+- IPv6 CIDR validation (valid and invalid cases)
+- Config file syntax (valid bash array/string format)
+- Config key completeness (all expected keys present)
+- `version` command output format
+- `help` command content
+- Unknown command error handling
+
+#### Integration Tests
+- Dry-run (`test`) command execution
+- Config validation (`validate`) command
+- Status display (`status`) command
+- Subnet discovery (`discover`) command
+
+### Writing Tests
+
+When adding a new feature, add tests covering:
+
+1. **Happy path**: Feature works with valid input
+2. **Error path**: Feature fails gracefully with bad input
+3. **Edge cases**: Empty values, boundary values, special characters
+
+Test functions follow the pattern:
+
+```bash
+test_your_feature() {
+    local passed=0 failed=0
+
+    # Test case 1
+    if some_condition; then
+        ((passed++))
+    else
+        echo "  FAIL: description of what failed"
+        ((failed++))
+    fi
+
+    echo "  Results: $passed passed, $failed failed"
+    TOTAL_PASS=$((TOTAL_PASS + passed))
+    TOTAL_FAIL=$((TOTAL_FAIL + failed))
+}
+```
+
+### Testing Checklist
+
+Before submitting a PR, verify:
+
+- [ ] `./tests/run_tests.sh lint` passes (zero shellcheck warnings)
+- [ ] `./tests/run_tests.sh unit` passes (all unit tests green)
+- [ ] `sudo ./tests/run_tests.sh integration` passes (if you changed dispatch logic)
+- [ ] Manual test with VPN connected (if you changed routing)
+- [ ] Manual test with VPN disconnected (if you changed vpn-down logic)
+- [ ] Kill switch on/off cycle (if you touched firewall code)
+- [ ] IPv4 and IPv6 both tested (if you changed route functions)
+- [ ] Config validation still works (if you added/changed config keys)
+- [ ] Dry-run mode shows correct planned actions
+
+## Pull Request Process
+
+### Branch Naming
+
+- `feature/short-description` — new features
+- `fix/short-description` — bug fixes
+- `docs/short-description` — documentation only
+- `test/short-description` — test improvements
 
 ### Commit Messages
 
-Use clear, descriptive commit messages following this format:
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>: <subject>
-
-<body>
-
-<footer>
+feat: add support for WireGuard key rotation
+fix: kill switch not cleaning up on script exit
+docs: update FAQ with nftables instructions
+test: add IPv6 CIDR edge case tests
+refactor: extract route validation into helper
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
+### PR Requirements
 
-**Examples:**
-
-```
-feat: Add support for WireGuard interface detection
-
-- Automatically detect wg* interfaces
-- Update configuration examples for WireGuard
-- Add WireGuard to FAQ section
-
-Closes #42
-```
-
-```
-fix: Prevent race condition in route addition
-
-The script could be called multiple times simultaneously by
-NetworkManager dispatcher events, causing conflicts. Added lock
-file mechanism to prevent concurrent execution.
-
-Fixes #38
-```
-
-### Pull Request Process
-
-1. **Update documentation** for any changed functionality
-2. **Add tests** if applicable
-3. **Update CHANGELOG.md** with your changes
-4. **Follow the coding standards** outlined above
-5. **Test thoroughly** on your system
-6. **Write a clear PR description**:
-   - What does this PR do?
-   - Why is this change needed?
-   - What testing was performed?
-   - Any breaking changes?
-
-**PR Template:**
-
-```markdown
-## Description
-Brief description of the changes
-
-## Motivation
-Why is this change needed? What problem does it solve?
-
-## Changes Made
-- Change 1
-- Change 2
-- Change 3
-
-## Testing Performed
-- [ ] Manual testing on Ubuntu 22.04
-- [ ] Tested VPN connection/disconnection
-- [ ] Verified routes persist
-- [ ] Checked logs for errors
-
-## Breaking Changes
-None / List any breaking changes
-
-## Related Issues
-Closes #123
-Related to #456
-```
+1. **Description**: Explain what changed and why
+2. **Tests**: All existing tests pass + new tests for new features
+3. **Documentation**: Update README/QUICKSTART/config example if behavior changes
+4. **Changelog**: Add entry to `CHANGELOG.md` under `[Unreleased]`
+5. **No breaking changes** without discussion first
+6. **One feature per PR** — keep changes focused
 
 ### Review Process
 
-1. Maintainer will review your PR
-2. May request changes or ask questions
-3. Once approved, will be merged into `main`
-4. Your contribution will be credited in the CHANGELOG
+1. Open a PR against `main`
+2. Automated checks run (lint, unit tests)
+3. Maintainer reviews code and tests
+4. Address feedback
+5. Merge after approval
 
-## 🏆 Recognition
+## Reporting Issues
 
-Contributors will be recognized in:
-- CHANGELOG.md for each release
-- README.md contributors section
-- Git commit history
+### Bug Reports
 
-## 📞 Getting Help
+Include:
 
-- **Questions?** Open a [GitHub Discussion](https://github.com/ChiefGyk3D/split_tunnel_switch/discussions)
-- **Issues?** Create a [GitHub Issue](https://github.com/ChiefGyk3D/split_tunnel_switch/issues)
-- **Chat?** (Add your preferred communication channel)
+- **OS and version** (e.g., Ubuntu 24.04)
+- **Bash version** (`bash --version`)
+- **VPN type** (OpenVPN, WireGuard, etc.)
+- **Config file** (sanitize sensitive data)
+- **Log output** (`tail -50 /var/log/split_tunnel.log`)
+- **Steps to reproduce**
+- **Expected vs. actual behavior**
 
-## 📚 Additional Resources
+### Feature Requests
 
-- [Bash Best Practices](https://bertvv.github.io/cheat-sheets/Bash.html)
-- [ShellCheck](https://www.shellcheck.net/) - Shell script linter
-- [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
-- [Linux Networking Guide](https://www.kernel.org/doc/html/latest/networking/index.html)
+Include:
 
----
+- **Use case**: What problem does this solve?
+- **Proposed solution**: How should it work?
+- **Alternatives considered**: What else did you evaluate?
 
-Thank you for contributing! 🎉
+## Recognition
+
+Contributors are recognized in release notes. Thank you for helping improve split tunneling for the Linux community!

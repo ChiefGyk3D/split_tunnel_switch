@@ -1,0 +1,35 @@
+# Logrotate configuration for NetworkManager Split Tunnel Script
+# Install to: /etc/logrotate.d/split_tunnel
+#
+# This rotates /var/log/split_tunnel.log weekly, keeping 4 weeks of history.
+# Rotated logs are compressed with gzip to save disk space.
+
+/var/log/split_tunnel.log {
+    # Rotate weekly
+    weekly
+
+    # Keep 4 rotated logs (4 weeks of history)
+    rotate 4
+
+    # Compress old logs with gzip
+    compress
+
+    # Don't compress the most recent rotated log (allows tailing)
+    delaycompress
+
+    # Don't error if the log file is missing
+    missingok
+
+    # Don't rotate if the log is empty
+    notifempty
+
+    # Create new log file with proper permissions after rotation
+    create 0644 root root
+
+    # Add date extension to rotated files (e.g., split_tunnel.log-20260228.gz)
+    dateext
+
+    # Truncate the original file in place after making a copy
+    # This is safer than moving the file (avoids issues with open file handles)
+    copytruncate
+}

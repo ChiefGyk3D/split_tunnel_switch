@@ -5,6 +5,7 @@
 .DS_Store
 .vscode/
 .idea/
+split_tunnel.conf
 
 # Log files
 *.log
