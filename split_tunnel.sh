@@ -88,7 +88,15 @@ DESKTOP_NOTIFICATIONS="false"
 
 # --- Twingate proxy ---
 TWINGATE_PROXY_MODE="off"       # "on" = relay bypass via LD_PRELOAD (work WiFi); "off" = direct
-TWINGATE_PROXY_PORT="8888"      # (reserved — tinyproxy port, no longer used for relay bypass)
+TWINGATE_PROXY_PORT="8888"      # (reserved - tinyproxy port, no longer used for relay bypass)
+
+# --- Fallback DNS for ProtonVPN leak-protection interfaces ---
+# DNS servers assigned to ipv6leakintrf0/pvpnksintrf0 when they come up with
+# no DNS, preventing Twingate from logging "no usable DNS servers".
+# Override in split_tunnel.conf with FALLBACK_DNS_SERVERS=("...").
+# Providers: Google=("8.8.8.8" "8.8.4.4")  Quad9=("9.9.9.9" "149.112.112.112")
+#            Cloudflare=("1.1.1.1" "1.0.0.1")
+FALLBACK_DNS_SERVERS=("8.8.8.8" "8.8.4.4")
 
 # ============================================================================
 # COLORS
@@ -273,6 +281,7 @@ _assign_array() {
         VPN_INTERFACES)       VPN_INTERFACES=("${values[@]}") ;;
         VERIFY_HOSTS)         VERIFY_HOSTS=("${values[@]}") ;;
         DIRECT_DNS_SERVERS)   DIRECT_DNS_SERVERS=("${values[@]}") ;;
+        FALLBACK_DNS_SERVERS) FALLBACK_DNS_SERVERS=("${values[@]}") ;;
         *)
             log_message "DEBUG" "Ignoring unknown config array: $key"
             ;;
@@ -1521,8 +1530,8 @@ if [[ $# -ge 2 ]] && [[ ! "$1" =~ ^($KNOWN_COMMANDS)$ ]] && [[ ! "$1" =~ ^- ]]; 
     if [[ "$NM_ACTION" == "up" ]] && \
        [[ "$NM_INTERFACE" =~ ^(ipv6leakintrf0|pvpnksintrf0)$ ]] && \
        command -v resolvectl >/dev/null 2>&1; then
-        resolvectl dns "$NM_INTERFACE" 8.8.8.8 8.8.4.4 2>/dev/null || true
-        log_message "INFO" "Set fallback DNS on $NM_INTERFACE for Twingate/ProtonVPN coexistence"
+        resolvectl dns "$NM_INTERFACE" "${FALLBACK_DNS_SERVERS[@]}" 2>/dev/null || true
+        log_message "INFO" "Set fallback DNS (${FALLBACK_DNS_SERVERS[*]}) on $NM_INTERFACE for Twingate/ProtonVPN coexistence"
     fi
 
     case "$NM_ACTION" in
