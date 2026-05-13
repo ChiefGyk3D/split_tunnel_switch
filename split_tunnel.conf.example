@@ -258,3 +258,46 @@ REMOVE_ROUTES_ON_VPN_DOWN="false"
 # DESKTOP_NOTIFICATIONS="false"  — silent operation (default)
 #
 DESKTOP_NOTIFICATIONS="false"
+
+# =============================================================================
+# TWINGATE RELAY BYPASS
+# =============================================================================
+# On restrictive networks (e.g. corporate/work WiFi) Twingate's relay ports
+# (30000–31000) may be blocked outbound.  The root cause is that twingated
+# uses SO_BINDTODEVICE to pin relay sockets directly to the physical interface,
+# bypassing Linux policy routing and any always-on VPN (e.g. ProtonVPN).
+#
+# The fix is an LD_PRELOAD shim (src/twingate_no_binddev.c) that intercepts
+# setsockopt(SO_BINDTODEVICE) calls from twingated and silently ignores them.
+# Without the binding, relay sockets follow normal ip policy routing and exit
+# via ProtonVPN where the relay port is reachable.
+#
+# The shim is loaded via a systemd service drop-in:
+#   /etc/systemd/system/twingate.service.d/no-bindtodevice.conf
+# It persists across Twingate restarts until explicitly removed.
+#
+# IMPORTANT: Do NOT use Twingate's built-in http-proxy config option.
+#            It crashes libhydra on initialization (exit code 143).
+#
+# Setup (one-time, requires gcc / build-essential):
+#   sudo ./setup.sh build-shim
+#
+# Toggle:
+#   sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy on
+#   sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy off
+#
+# With aliases installed (sudo ./setup.sh install-aliases):
+#   twingate-work   — enable relay bypass (use at work)
+#   twingate-home   — disable relay bypass (use at home)
+#
+# "on"  — install systemd drop-in, restart Twingate (relay via ProtonVPN)
+# "off" — remove systemd drop-in, restart Twingate (direct connect)
+#
+# This value is updated automatically when you run twingate-proxy on|off.
+#
+TWINGATE_PROXY_MODE="off"
+
+# Port reserved for tinyproxy (installed alongside this feature).
+# Not used by the LD_PRELOAD relay bypass but kept for reference.
+#
+TWINGATE_PROXY_PORT="8888"
