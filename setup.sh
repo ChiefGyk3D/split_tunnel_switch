@@ -23,6 +23,11 @@ SYSTEMD_TIMER_SRC="extras/systemd/split-tunnel-persist.timer"
 SYSTEMD_SERVICE_DST="/etc/systemd/system/split-tunnel-persist.service"
 SYSTEMD_TIMER_DST="/etc/systemd/system/split-tunnel-persist.timer"
 TEST_SCRIPT="tests/run_tests.sh"
+TWINGATE_SHIM_SRC="src/twingate_no_binddev.c"
+TWINGATE_SHIM_DST="/usr/local/lib/twingate-no-binddev.so"
+TWINGATE_DROP_IN_DIR="/etc/systemd/system/twingate.service.d"
+TWINGATE_DROP_IN="${TWINGATE_DROP_IN_DIR}/no-bindtodevice.conf"
+ALIASES_FILE="/etc/profile.d/split-tunnel-aliases.sh"
 
 # ============================================================================
 # Colors
@@ -85,6 +90,7 @@ check_prerequisites() {
     command -v nft &>/dev/null      || print_info "nft not found (kill switch with nftables backend unavailable)"
     command -v notify-send &>/dev/null || print_info "notify-send not found (desktop notifications unavailable)"
     command -v shellcheck &>/dev/null  || print_info "shellcheck not found (test suite linting unavailable)"
+    command -v gcc &>/dev/null          || print_info "gcc not found (Twingate relay bypass shim build unavailable — install build-essential)"
 
     print_success "Prerequisites check complete"
 }
@@ -196,7 +202,7 @@ configure_vpn_interfaces() {
     local detected=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && detected+=("$line")
-    done < <(ip link show 2>/dev/null | grep -oP '(?<=: )(tun|tap|wg|ipsec|ppp|cscotun|tailscale|wg-)\S+(?=:)' || true)
+    done < <(ip link show 2>/dev/null | grep -oP '(?<=: )(tun|tap|wg|ipsec|ppp|cscotun|tailscale|wg-|sdwan)\S+(?=:)' || true)
 
     if [[ ${#detected[@]} -gt 0 ]]; then
         echo "Detected interfaces: ${detected[*]}"
@@ -402,6 +408,120 @@ install_systemd_timer() {
 }
 
 # ============================================================================
+# Twingate relay bypass shim
+# ============================================================================
+build_twingate_shim() {
+    print_info "Building Twingate relay bypass shim..."
+
+    if [[ ! -f "$TWINGATE_SHIM_SRC" ]]; then
+        print_error "C source not found: $TWINGATE_SHIM_SRC"
+        print_info "Expected relative to setup.sh: src/twingate_no_binddev.c"
+        return 1
+    fi
+
+    if ! command -v gcc &>/dev/null; then
+        print_error "gcc not found — install build-essential: sudo apt install build-essential"
+        return 1
+    fi
+
+    local tmp_so
+    tmp_so=$(mktemp /tmp/twingate-no-binddev-XXXXXX.so)
+    if gcc -shared -fPIC -o "$tmp_so" "$TWINGATE_SHIM_SRC" -ldl 2>&1; then
+        install -m 644 "$tmp_so" "$TWINGATE_SHIM_DST"
+        rm -f "$tmp_so"
+        print_success "Shim installed to $TWINGATE_SHIM_DST"
+        return 0
+    else
+        rm -f "$tmp_so"
+        print_error "Compilation failed — see errors above"
+        return 1
+    fi
+}
+
+configure_twingate_proxy_setup() {
+    echo ""
+    echo -e "${BOLD}Twingate Relay Bypass (optional):${NC}"
+    echo "  On restrictive networks (e.g., work WiFi) Twingate's relay ports"
+    echo "  (30000-31000) may be blocked.  An LD_PRELOAD shim lets relay traffic"
+    echo "  flow through ProtonVPN (or any always-on VPN) instead."
+    echo "  Enable at work with: sudo $INSTALL_PATH twingate-proxy on"
+    echo "  Disable at home with: sudo $INSTALL_PATH twingate-proxy off"
+    echo ""
+    read -rp "Set up Twingate relay bypass support? (y/N): " -n 1 choice; echo
+    [[ ! "$choice" =~ ^[Yy]$ ]] && return 0
+
+    if ! command -v gcc &>/dev/null; then
+        print_error "gcc required — install with: sudo apt install build-essential"
+        print_info "You can run 'sudo ./setup.sh build-shim' later once gcc is installed"
+        return 1
+    fi
+
+    if build_twingate_shim; then
+        # Write TWINGATE_PROXY_MODE=off into config (starts disabled; user enables at work)
+        if [[ -f "$CONFIG_FILE" ]]; then
+            if grep -q '^TWINGATE_PROXY_MODE=' "$CONFIG_FILE" 2>/dev/null; then
+                sed -i 's|^TWINGATE_PROXY_MODE=.*|TWINGATE_PROXY_MODE="off"|' "$CONFIG_FILE"
+            else
+                printf '\n# Twingate relay bypass (toggle with: twingate-proxy on|off)\nTWINGATE_PROXY_MODE="off"\nTWINGATE_PROXY_PORT="8888"\n' >> "$CONFIG_FILE"
+            fi
+        fi
+        echo ""
+        print_success "Twingate relay bypass ready."
+        print_info "At work  : sudo $INSTALL_PATH twingate-proxy on"
+        print_info "At home  : sudo $INSTALL_PATH twingate-proxy off"
+        print_info "Or use the aliases: twingate-work / twingate-home (after installing aliases)"
+    fi
+}
+
+# ============================================================================
+# Shell aliases
+# ============================================================================
+install_aliases() {
+    print_info "Installing shell aliases to $ALIASES_FILE ..."
+    cat > "$ALIASES_FILE" << 'ALIASEOF'
+# split_tunnel_switch — convenience aliases
+# Installed by setup.sh. Remove this file to uninstall.
+
+# Manage split tunnel
+alias st='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel'
+alias st-status='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel status'
+alias st-on='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel add'
+alias st-off='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel remove'
+alias st-reload='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel reload'
+alias st-log='tail -f /var/log/split_tunnel.log'
+
+# Twingate relay bypass — enable when at work, disable at home
+alias twingate-work='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy on'
+alias twingate-home='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy off'
+alias twingate-proxy-status='sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy'
+ALIASEOF
+    chmod 644 "$ALIASES_FILE"
+    print_success "Aliases installed to $ALIASES_FILE"
+    print_info "Open a new shell or run: source $ALIASES_FILE"
+    echo ""
+    echo -e "  ${CYAN}Available aliases:${NC}"
+    echo "    st               — run any split_tunnel command (e.g. st status)"
+    echo "    st-status        — show split tunnel status"
+    echo "    st-on            — add/restore split tunnel routes"
+    echo "    st-off           — remove split tunnel routes"
+    echo "    st-reload        — reload config and re-apply routes"
+    echo "    st-log           — tail the split tunnel log"
+    echo "    twingate-work    — enable relay bypass (use at work)"
+    echo "    twingate-home    — disable relay bypass (use at home)"
+    echo "    twingate-proxy-status — show current proxy mode"
+    echo ""
+}
+
+remove_aliases() {
+    if [[ -f "$ALIASES_FILE" ]]; then
+        rm -f "$ALIASES_FILE"
+        print_success "Removed $ALIASES_FILE"
+    else
+        print_info "No aliases file found at $ALIASES_FILE"
+    fi
+}
+
+# ============================================================================
 # Test / Apply / Status
 # ============================================================================
 test_installation() {
@@ -462,6 +582,20 @@ uninstall() {
     # Remove installed script
     rm -f "$INSTALL_PATH"
     print_success "Removed $INSTALL_PATH"
+
+    # Remove Twingate shim and drop-in
+    if [[ -f "$TWINGATE_DROP_IN" ]]; then
+        rm -f "$TWINGATE_DROP_IN"
+        systemctl daemon-reload 2>/dev/null || true
+        print_success "Removed Twingate relay bypass drop-in"
+    fi
+    if [[ -f "$TWINGATE_SHIM_DST" ]]; then
+        read -rp "Remove Twingate shim ($TWINGATE_SHIM_DST)? (y/n): " -n 1; echo
+        [[ $REPLY =~ ^[Yy]$ ]] && rm -f "$TWINGATE_SHIM_DST" && print_success "Removed Twingate shim"
+    fi
+
+    # Remove aliases
+    remove_aliases
 
     # Remove logrotate
     rm -f "$LOGROTATE_DST"
@@ -534,6 +668,13 @@ interactive_install() {
     print_info "Testing configuration (dry run)..."
     test_installation || true
 
+    # Twingate relay bypass (optional)
+    configure_twingate_proxy_setup
+
+    echo ""
+    read -rp "Install shell aliases (twingate-work/twingate-home/st-status etc.)? (y/N): " -n 1; echo
+    [[ $REPLY =~ ^[Yy]$ ]] && install_aliases
+
     echo ""
     read -rp "Apply routes now? (y/n): " -n 1
     echo
@@ -600,9 +741,11 @@ show_menu() {
     echo "  7) Apply routes now"
     echo "  8) Remove routes now"
     echo "  9) Run test suite"
+    echo "  t) Build Twingate relay bypass shim"
+    echo "  a) Install shell aliases"
     echo "  0) Exit"
     echo ""
-    read -rp "Select an option [0-9]: " -n 1
+    read -rp "Select an option: " -n 1
     echo
 
     case $REPLY in
@@ -615,6 +758,8 @@ show_menu() {
         7) check_root; [[ -x "$INSTALL_PATH" ]] && apply_routes || print_error "Not installed" ;;
         8) check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" remove || print_error "Not installed" ;;
         9) run_tests ;;
+        t|T) check_root; build_twingate_shim ;;
+        a|A) check_root; install_aliases ;;
         0) exit 0 ;;
         *) print_error "Invalid option"; exit 1 ;;
     esac
@@ -627,15 +772,30 @@ if [[ $# -eq 0 ]]; then
     show_menu
 else
     case "$1" in
-        install)       check_root; interactive_install ;;
-        quick-install) check_root; quick_install ;;
-        uninstall)     check_root; uninstall ;;
-        status)        show_status ;;
-        validate)      check_root; [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed" ;;
-        test)          check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed" ;;
-        run-tests)     run_tests ;;
+        install)          check_root; interactive_install ;;
+        quick-install)    check_root; quick_install ;;
+        uninstall)        check_root; uninstall ;;
+        status)           show_status ;;
+        validate)         check_root; [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed" ;;
+        test)             check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed" ;;
+        run-tests)        run_tests ;;
+        build-shim)       check_root; build_twingate_shim ;;
+        install-aliases)  check_root; install_aliases ;;
+        twingate-proxy)
+            check_root
+            if [[ -z "${2:-}" ]]; then
+                echo "Twingate relay bypass shim: $([ -f "$TWINGATE_SHIM_DST" ] && echo 'installed' || echo 'NOT installed')"
+                echo "Systemd drop-in active:     $([ -f "$TWINGATE_DROP_IN" ] && echo 'yes' || echo 'no')"
+                echo "Usage: $0 twingate-proxy [on|off]"
+            else
+                [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" twingate-proxy "${2}" || print_error "split_tunnel not installed"
+            fi
+            ;;
         *)
             echo "Usage: $0 [install|quick-install|uninstall|status|validate|test|run-tests]"
+            echo "       $0 build-shim          # compile Twingate relay bypass shim"
+            echo "       $0 install-aliases      # install shell aliases"
+            echo "       $0 twingate-proxy [on|off]  # toggle relay bypass"
             echo "  Or run without arguments for interactive menu"
             exit 1
             ;;

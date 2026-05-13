@@ -86,6 +86,10 @@ REMOVE_ROUTES_ON_VPN_DOWN="false"
 # --- Desktop notifications ---
 DESKTOP_NOTIFICATIONS="false"
 
+# --- Twingate proxy ---
+TWINGATE_PROXY_MODE="off"       # "on" = relay bypass via LD_PRELOAD (work WiFi); "off" = direct
+TWINGATE_PROXY_PORT="8888"      # (reserved — tinyproxy port, no longer used for relay bypass)
+
 # ============================================================================
 # COLORS
 # ============================================================================
@@ -249,6 +253,8 @@ _assign_scalar() {
         DNS_LEAK_PREVENTION)    DNS_LEAK_PREVENTION="$value" ;;
         REMOVE_ROUTES_ON_VPN_DOWN) REMOVE_ROUTES_ON_VPN_DOWN="$value" ;;
         DESKTOP_NOTIFICATIONS)  DESKTOP_NOTIFICATIONS="$value" ;;
+        TWINGATE_PROXY_MODE)    TWINGATE_PROXY_MODE="$value" ;;
+        TWINGATE_PROXY_PORT)    TWINGATE_PROXY_PORT="$value" ;;
         *)
             log_message "DEBUG" "Ignoring unknown config key: $key"
             ;;
@@ -506,7 +512,9 @@ discover_local_subnets() {
     local -a discovered_v6=()
 
     # Interfaces to always exclude (VPN artifacts, leak protection, virtual bridges)
-    local exclude_pattern="${vpn_pattern}|^lo$|^virbr|^docker|^br-|^veth|ipv6leak"
+    # sdwan* is Twingate's SD-WAN interface; always exclude it even if not listed
+    # in VPN_INTERFACES so its managed subnets are never added as bypass routes.
+    local exclude_pattern="${vpn_pattern}|^lo$|^virbr|^docker|^br-|^veth|ipv6leak|^sdwan"
 
     log_message "INFO" "Auto-discovering local subnets..."
 
@@ -1145,6 +1153,65 @@ reload_routes() {
 }
 
 # ============================================================================
+# TWINGATE PROXY
+# ============================================================================
+#
+# Twingate's relay sockets use SO_BINDTODEVICE to pin themselves to the
+# physical interface (e.g. wlp3s0).  On restrictive networks (e.g. work WiFi)
+# this bypasses ProtonVPN policy routing, causing relay ports 30000-31000 to
+# be blocked.  The fix is an LD_PRELOAD shim (twingate-no-binddev.so) that
+# silently drops SO_BINDTODEVICE calls from twingated so that relay traffic
+# follows normal ip rules and exits via ProtonVPN instead.
+#
+# The shim is installed via a systemd service drop-in; it persists across
+# Twingate restarts automatically and does not require the HTTP proxy.
+# Toggle with: split_tunnel.sh twingate-proxy [on|off]
+# ============================================================================
+configure_twingate_proxy() {
+    local mode="${1:-${TWINGATE_PROXY_MODE:-off}}"
+    local so_path="/usr/local/lib/twingate-no-binddev.so"
+    local drop_in_dir="/etc/systemd/system/twingate.service.d"
+    local drop_in_file="${drop_in_dir}/no-bindtodevice.conf"
+
+    case "$mode" in
+        on)
+            if [[ ! -f "$so_path" ]]; then
+                log_message "ERROR" "LD_PRELOAD library not found: $so_path"
+                log_message "INFO"  "Build it with: gcc -shared -fPIC -o $so_path \\"
+                log_message "INFO"  "    /home/chiefgyk3d/src/split_tunnel_switch/src/twingate_no_binddev.c -ldl"
+                return 1
+            fi
+            log_message "INFO" "Enabling Twingate relay bypass via LD_PRELOAD (no SO_BINDTODEVICE)"
+            mkdir -p "$drop_in_dir"
+            printf '[Service]\nEnvironment=LD_PRELOAD=%s\n' "$so_path" > "$drop_in_file"
+            systemctl daemon-reload 2>/dev/null || true
+            if systemctl restart twingate.service 2>/dev/null; then
+                log_message "SUCCESS" "Twingate relay bypass enabled — relay traffic routes via ProtonVPN"
+            else
+                log_message "WARNING" "Twingate restart scheduled (may need re-auth)"
+            fi
+            ;;
+        off)
+            log_message "INFO" "Disabling Twingate relay bypass (direct connect)"
+            rm -f "$drop_in_file"
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl restart twingate.service 2>/dev/null || true
+            log_message "SUCCESS" "Twingate relay bypass disabled — direct connect mode"
+            ;;
+        *)
+            log_message "ERROR" "twingate-proxy: mode must be 'on' or 'off', got: '$mode'"
+            return 1
+            ;;
+    esac
+
+    # Persist to on-disk config so the setting survives splits/reloads
+    if [[ -f "$CONFIG_FILE" ]]; then
+        sed -i "s|^TWINGATE_PROXY_MODE=.*|TWINGATE_PROXY_MODE=\"${mode}\"|" "$CONFIG_FILE" 2>/dev/null || true
+        log_message "DEBUG" "TWINGATE_PROXY_MODE persisted as '${mode}' in $CONFIG_FILE"
+    fi
+}
+
+# ============================================================================
 # STATUS
 # ============================================================================
 show_status() {
@@ -1242,6 +1309,20 @@ show_status() {
     [[ "$DNS_LEAK_PREVENTION" == "true" ]] && dns_status="${GREEN}enabled${NC}"
     echo -e "${BOLD}DNS Leak Prevention:${NC} $dns_status"
 
+    # Twingate relay bypass
+    local tw_drop_in="/etc/systemd/system/twingate.service.d/no-bindtodevice.conf"
+    local tw_so="/usr/local/lib/twingate-no-binddev.so"
+    local tw_status
+    if [[ -f "$tw_drop_in" ]] && [[ -f "$tw_so" ]]; then
+        tw_status="${GREEN}ACTIVE${NC} (LD_PRELOAD shim; relay via ProtonVPN)"
+    elif [[ -f "$tw_drop_in" ]]; then
+        tw_status="${YELLOW}drop-in installed but shim missing:${NC} $tw_so"
+    else
+        tw_status="off (direct connect)"
+    fi
+    echo -e "${BOLD}Twingate Relay Bypass:${NC} $tw_status"
+    echo -e "${BOLD}Twingate Proxy Mode:${NC} ${TWINGATE_PROXY_MODE:-off}"
+
     # Features
     echo -e "${BOLD}Auto-discover:${NC} $AUTO_DISCOVER_SUBNETS"
     echo -e "${BOLD}Connectivity verify:${NC} $VERIFY_CONNECTIVITY"
@@ -1270,6 +1351,7 @@ COMMANDS:
     discover        Auto-discover and display local subnets
     kill-switch-on  Manually enable the kill switch
     kill-switch-off Manually disable the kill switch
+    twingate-proxy  Enable/disable Twingate relay proxy (on|off)
     version         Show version information
     help            Show this help message
 
@@ -1393,6 +1475,17 @@ main() {
             KILL_SWITCH="true"
             disable_kill_switch
             ;;
+        twingate-proxy)
+            check_root
+            load_config
+            local new_mode="${args[1]:-}"
+            if [[ -z "$new_mode" ]]; then
+                echo "Twingate proxy mode: ${TWINGATE_PROXY_MODE:-off}"
+                echo "Usage: $SCRIPT_NAME twingate-proxy [on|off]"
+                exit 0
+            fi
+            configure_twingate_proxy "$new_mode"
+            ;;
         version|--version)
             echo "split_tunnel v${VERSION}"
             ;;
@@ -1410,7 +1503,7 @@ main() {
 # ============================================================================
 # DISPATCHER ENTRY POINT
 # ============================================================================
-KNOWN_COMMANDS="add|remove|reload|status|test|validate|discover|kill-switch-on|kill-switch-off|version|help"
+KNOWN_COMMANDS="add|remove|reload|status|test|validate|discover|kill-switch-on|kill-switch-off|twingate-proxy|version|help"
 
 if [[ $# -ge 2 ]] && [[ ! "$1" =~ ^($KNOWN_COMMANDS)$ ]] && [[ ! "$1" =~ ^- ]]; then
     # Called by NetworkManager dispatcher
@@ -1419,6 +1512,18 @@ if [[ $# -ge 2 ]] && [[ ! "$1" =~ ^($KNOWN_COMMANDS)$ ]] && [[ ! "$1" =~ ^- ]]; 
 
     check_root
     load_config
+
+    # Ensure ProtonVPN IPv6 leak-protection interfaces always have valid DNS so
+    # Twingate does not fail when it selects one as a bypass candidate.
+    # These interfaces are created by ProtonVPN for IPv6 leak prevention; they
+    # intentionally have no DNS assigned, which causes Twingate's sdwan_network_set
+    # to log "no usable DNS servers" and break the relay connection.
+    if [[ "$NM_ACTION" == "up" ]] && \
+       [[ "$NM_INTERFACE" =~ ^(ipv6leakintrf0|pvpnksintrf0)$ ]] && \
+       command -v resolvectl >/dev/null 2>&1; then
+        resolvectl dns "$NM_INTERFACE" 8.8.8.8 8.8.4.4 2>/dev/null || true
+        log_message "INFO" "Set fallback DNS on $NM_INTERFACE for Twingate/ProtonVPN coexistence"
+    fi
 
     case "$NM_ACTION" in
         up|vpn-up)

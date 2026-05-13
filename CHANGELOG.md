@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Twingate relay bypass
+
+### Added
+- **Twingate relay bypass** (`twingate-proxy on|off`): LD_PRELOAD shim
+  (`src/twingate_no_binddev.c`) that intercepts `setsockopt(SO_BINDTODEVICE)` in
+  `twingated` and silently ignores it.  Without the device binding, Twingate relay
+  sockets follow normal Linux policy routing (e.g., ProtonVPN), bypassing corporate
+  firewalls that block relay ports 30000–31000.
+- **systemd drop-in management**: `twingate-proxy on` writes
+  `/etc/systemd/system/twingate.service.d/no-bindtodevice.conf` with
+  `LD_PRELOAD=/usr/local/lib/twingate-no-binddev.so`; `twingate-proxy off` removes
+  it.  The setting persists across Twingate restarts automatically.
+- **`setup.sh build-shim`**: compiles `src/twingate_no_binddev.c` and installs the
+  `.so` to `/usr/local/lib/twingate-no-binddev.so`; also offered during interactive
+  install.
+- **`setup.sh install-aliases`** and menu option `a)`: installs
+  `/etc/profile.d/split-tunnel-aliases.sh` with aliases:
+  `st`, `st-status`, `st-on`, `st-off`, `st-reload`, `st-log`,
+  `twingate-work`, `twingate-home`, `twingate-proxy-status`.
+- **`setup.sh twingate-proxy [on|off]`**: thin wrapper to toggle relay bypass from
+  the setup script without needing the full dispatcher path.
+- **Twingate relay bypass in `status` output**: `show_status()` now reports whether
+  the systemd drop-in and `.so` are active.
+- **`TWINGATE_PROXY_MODE` persisted on toggle**: `twingate-proxy on|off` updates
+  `/etc/split_tunnel/split_tunnel.conf` so the intent is recorded.
+- **`sdwan0` excluded from `AUTO_DISCOVER_SUBNETS`**: Twingate's TUN interface is
+  now filtered alongside other VPN/virtual interfaces.
+- **`sdwan0` added to `VPN_INTERFACES` auto-detection** in `setup.sh`.
+- **NM dispatcher DNS fix**: on `up`/`vpn-up` events the dispatcher corrects DNS on
+  ProtonVPN's `ipv6leakintrf0` / `pvpnksintrf0` dummy interfaces (which Twingate
+  can co-opt with a bogus `0.0.0.0` DNS entry).
+
+### Notes
+- Twingate's built-in `http-proxy` config (`twingate config networking http-proxy=…`)
+  **must not be used** — it crashes `libhydra` with exit code 143.  This feature
+  uses LD_PRELOAD instead and does not modify Twingate's own config at all.
+- After `twingate-proxy on` or `off`, Twingate restarts and may require
+  re-authentication if the session token has expired.
+
 ## [3.0.1] - 2025-06-28
 
 ### Added
