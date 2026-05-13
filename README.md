@@ -17,6 +17,7 @@ A robust, feature-rich split tunneling solution for Linux systems using NetworkM
 - [Usage](#usage)
 - [Tunnel Modes](#tunnel-modes)
 - [Advanced Features](#advanced-features)
+- [Twingate Relay Bypass](#twingate-relay-bypass)
 - [How It Works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
@@ -66,6 +67,12 @@ This script enables **split tunneling** by managing routes so that specific subn
 - **VPN-down cleanup**: Configurable automatic route removal on VPN disconnect
 - **Interactive setup wizard**: Step-by-step installation with all features
 - **Clean uninstall**: Removes scripts, configs, firewall rules, and systemd units
+- **Shell aliases**: Optional `twingate-work`, `twingate-home`, `st-status`, `st-on/off` shortcuts
+
+### Twingate Integration
+- **Relay bypass**: LD_PRELOAD shim intercepts `SO_BINDTODEVICE` so Twingate relay traffic flows through ProtonVPN instead of a firewalled physical interface
+- **Manually toggleable**: `twingate-proxy on` (work) / `twingate-proxy off` (home) — persists across reboots via systemd drop-in
+- **Safe**: does not use the broken `http-proxy` config; does not affect Twingate authentication or TUN interface
 
 ## Requirements
 
@@ -82,6 +89,7 @@ This script enables **split tunneling** by managing routes so that specific subn
 | Kill switch (nftables) | `nft` |
 | Desktop notifications | `notify-send` (libnotify) |
 | Linting tests | `shellcheck` |
+| Twingate relay bypass | `gcc` (`build-essential`) |
 
 ### Tested On
 
@@ -293,11 +301,40 @@ sudo $SCRIPT -c /path/to/config.conf add
 sudo $SCRIPT kill-switch-on
 sudo $SCRIPT kill-switch-off
 
+# Twingate relay bypass (see Twingate Relay Bypass section)
+sudo $SCRIPT twingate-proxy on   # enable at work
+sudo $SCRIPT twingate-proxy off  # disable at home
+sudo $SCRIPT twingate-proxy      # show current state
+
 # Show version
 sudo $SCRIPT version
 
 # Show help
 sudo $SCRIPT help
+```
+
+### Shell Aliases
+
+Install convenience aliases during `setup.sh` or manually with `sudo ./setup.sh install-aliases`:
+
+```bash
+# Installed to /etc/profile.d/split-tunnel-aliases.sh
+
+st                    # run any command: st status, st add, st remove ...
+st-status             # show split tunnel status
+st-on                 # add/restore split tunnel routes
+st-off                # remove split tunnel routes
+st-reload             # reload config and re-apply routes
+st-log                # tail -f /var/log/split_tunnel.log
+
+twingate-work         # enable relay bypass (use when at work)
+twingate-home         # disable relay bypass (use when at home)
+twingate-proxy-status # show current Twingate proxy mode
+```
+
+Source them immediately after install:
+```bash
+source /etc/profile.d/split-tunnel-aliases.sh
 ```
 
 ### Setup Script
@@ -311,6 +348,9 @@ sudo ./setup.sh status         # Show status
 sudo ./setup.sh validate       # Validate config
 sudo ./setup.sh test           # Dry-run
 sudo ./setup.sh run-tests      # Run test suite
+sudo ./setup.sh build-shim     # Compile Twingate relay bypass shim
+sudo ./setup.sh install-aliases  # Install shell aliases
+sudo ./setup.sh twingate-proxy [on|off]  # Toggle relay bypass
 ```
 
 ## Tunnel Modes
@@ -405,6 +445,104 @@ After adding routes, pings specified hosts to confirm reachability. Sends a desk
 VERIFY_CONNECTIVITY="true"
 VERIFY_HOSTS=("192.168.1.1" "nas.local")
 ```
+
+## Twingate Relay Bypass
+
+### Problem
+
+Twingate's `twingated` daemon uses `SO_BINDTODEVICE` to pin all relay sockets to the physical network interface (e.g., `wlp3s0`). This syscall bypasses Linux policy routing entirely, so even if ProtonVPN is your default route, Twingate's relay traffic exits directly through the physical interface.
+
+On restrictive networks — such as corporate/work WiFi — Twingate's relay port range (30000–31000) is commonly blocked outbound. The result is a stuck `relay-hydra: Disconnected` state and no access to remote resources.
+
+> **Note:** Twingate's own `http-proxy` config option (`twingate config networking http-proxy=...`) does **not** fix this — it causes `libhydra` to crash on initialization (code 143). Do not use it.
+
+### Solution: LD_PRELOAD shim
+
+A small C library (`src/twingate_no_binddev.c`) intercepts `setsockopt(SOL_SOCKET, SO_BINDTODEVICE)` calls from `twingated` and silently returns success without binding to any device. Without the device binding, relay sockets follow normal Linux policy routing — which routes them through ProtonVPN (or any always-on VPN) where the relay port is reachable.
+
+The shim is loaded via a systemd service drop-in at:
+```
+/etc/systemd/system/twingate.service.d/no-bindtodevice.conf
+```
+
+It persists automatically across Twingate restarts. Removing the drop-in restores direct behavior.
+
+### Prerequisites
+
+```bash
+# Debian/Ubuntu
+sudo apt install build-essential
+
+# Fedora/RHEL
+sudo dnf install gcc
+```
+
+### Setup
+
+```bash
+# During interactive install — the wizard will ask
+sudo ./setup.sh install
+
+# Or standalone, after installation
+sudo ./setup.sh build-shim
+```
+
+This compiles the shim and installs it to `/usr/local/lib/twingate-no-binddev.so`.
+
+### Usage
+
+```bash
+# Enable at work (routes Twingate relay via ProtonVPN)
+sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy on
+
+# Disable at home (Twingate connects directly)
+sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy off
+
+# Check current state
+sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel twingate-proxy
+
+# With aliases installed:
+twingate-work    # enable relay bypass
+twingate-home    # disable relay bypass
+```
+
+The setting is persisted to `/etc/split_tunnel/split_tunnel.conf` as `TWINGATE_PROXY_MODE`.
+
+### How It Works
+
+```
+Without shim:
+  twingated → setsockopt(SO_BINDTODEVICE="wlp3s0") → relay SYN exits wlp3s0
+  Work firewall BLOCKS port 30006 outbound → relay times out
+
+With shim (twingate-proxy on):
+  twingated → setsockopt(SO_BINDTODEVICE) → shim returns 0 (no-op)
+  relay socket follows ip rule 31545 → routes via ProtonVPN (proton0)
+  ProtonVPN exit node CAN reach port 30006 → relay establishes
+```
+
+### Verify It's Working
+
+```bash
+# Check systemctl status shows the drop-in
+systemctl status twingate.service | grep Drop-In
+
+# Confirm STUN reports VPN IP (not work WiFi IP)
+journalctl -u twingate -n 20 | grep stun_nat_address
+
+# Full status
+sudo /etc/NetworkManager/dispatcher.d/99-split-tunnel status
+```
+
+### Workflow
+
+| Location | Command | Effect |
+|----------|---------|--------|
+| Arriving at work | `twingate-work` | Enables relay bypass, restarts Twingate |
+| Leaving work / at home | `twingate-home` | Removes bypass, restarts Twingate |
+| Status check | `st-status` | Shows bypass state in status output |
+
+Twingate will ask you to re-authenticate after each restart if the session token has expired. This is normal.
 
 ## How It Works
 
@@ -606,6 +744,15 @@ A: The kill switch is re-applied by the systemd persistence timer and on VPN-up 
 
 **Q: Is the configuration file safe?**
 A: Yes — the config file is parsed line-by-line. Values are never `source`'d or `eval`'d. Only recognized keys are accepted.
+
+**Q: I use Twingate and it can't connect at work. What do I do?**
+A: Your work network likely blocks Twingate's relay ports (30000–31000). Enable the relay bypass: `sudo ./setup.sh build-shim` then `twingate-work`. See the [Twingate Relay Bypass](#twingate-relay-bypass) section.
+
+**Q: Why not use Twingate's built-in `http-proxy` option?**
+A: It breaks `libhydra` initialization (crash code 143). The LD_PRELOAD shim approach bypasses the issue entirely without touching Twingate's config.
+
+**Q: Does `twingate-proxy on` disconnect ProtonVPN?**
+A: No. It only restarts the `twingate.service`. ProtonVPN (WireGuard) is unaffected.
 
 ## Test Suite
 
