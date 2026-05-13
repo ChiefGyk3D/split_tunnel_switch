@@ -301,3 +301,23 @@ TWINGATE_PROXY_MODE="off"
 # Not used by the LD_PRELOAD relay bypass but kept for reference.
 #
 TWINGATE_PROXY_PORT="8888"
+
+# =============================================================================
+# FALLBACK DNS FOR PROTONVPN LEAK-PROTECTION INTERFACES
+# =============================================================================
+# ProtonVPN creates dummy interfaces (ipv6leakintrf0, pvpnksintrf0) for IPv6
+# leak prevention. They come up with no DNS assigned, which causes Twingate's
+# sdwan_network_set to log "no usable DNS servers" and break relay connections.
+#
+# This setting controls which DNS servers are assigned to those interfaces
+# automatically by the NetworkManager dispatcher when they appear.
+#
+# Choose a provider or enter your own:
+#
+#   Google:      ("8.8.8.8" "8.8.4.4")
+#   Quad9:       ("9.9.9.9" "149.112.112.112")    (privacy + threat-blocking)
+#   Cloudflare:  ("1.1.1.1" "1.0.0.1")            (fast, privacy-focused)
+#
+# Default: Google (most universally reachable)
+#
+FALLBACK_DNS_SERVERS=("8.8.8.8" "8.8.4.4")
