@@ -1,0 +1,28 @@
+# Lint for the split tunnel scripts: shellcheck, shfmt.
+# The jobs live in ChiefGyk3D/git-your-ship-together; this file only calls them.
+# Static checks only: nothing in this repository is ever executed by CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/bash-ci.yml@9d6825dd4e0e4d524fca3733f416437bbd7851e1 # v1.31.0
+    permissions:
+      contents: read
+    with:
+      # shellcheck and shfmt only: no test-command, so no script is run.
+      workflow-lint: true
+      egress-policy: block

@@ -120,7 +120,7 @@ test_ipv4_validation() {
             # Use a simpler direct regex check
             if [[ "$cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$ ]]; then
                 local o1="${BASH_REMATCH[1]}" o2="${BASH_REMATCH[2]}" o3="${BASH_REMATCH[3]}" o4="${BASH_REMATCH[4]}" p="${BASH_REMATCH[5]}"
-                if (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && p <= 32 )); then
+                if ((o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && p <= 32)); then
                     test_pass "IPv4 valid: $cidr"
                 else
                     test_fail "IPv4 should be valid: $cidr"
@@ -136,7 +136,7 @@ test_ipv4_validation() {
     for cidr in "${invalid_cases[@]}"; do
         if [[ "$cidr" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$ ]]; then
             local o1="${BASH_REMATCH[1]}" o2="${BASH_REMATCH[2]}" o3="${BASH_REMATCH[3]}" o4="${BASH_REMATCH[4]}" p="${BASH_REMATCH[5]}"
-            if (( o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255 || p > 32 )); then
+            if ((o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255 || p > 32)); then
                 test_pass "IPv4 invalid rejected: $cidr"
             else
                 test_fail "IPv4 should be invalid: $cidr"
@@ -151,9 +151,12 @@ test_ipv6_validation() {
     # Valid IPv6 CIDR
     local valid=("fd00::/48" "2001:db8::/32" "::1/128" "fe80::/10")
     for cidr in "${valid[@]}"; do
-        [[ "$cidr" == */* ]] || { test_fail "IPv6 valid: $cidr"; continue; }
+        [[ "$cidr" == */* ]] || {
+            test_fail "IPv6 valid: $cidr"
+            continue
+        }
         local prefix="${cidr##*/}"
-        if [[ "$prefix" =~ ^[0-9]+$ ]] && (( prefix <= 128 )); then
+        if [[ "$prefix" =~ ^[0-9]+$ ]] && ((prefix <= 128)); then
             test_pass "IPv6 valid: $cidr"
         else
             test_fail "IPv6 should be valid: $cidr"
@@ -170,8 +173,8 @@ test_ipv6_validation() {
         local addr="${cidr%/*}"
         local prefix="${cidr##*/}"
         # Must have valid prefix AND valid hex:colon address
-        if [[ ! "$prefix" =~ ^[0-9]+$ ]] || (( prefix > 128 )) || \
-           [[ ! "$addr" =~ ^[0-9a-fA-F:]+$ ]] || [[ "$addr" != *:* ]]; then
+        if [[ ! "$prefix" =~ ^[0-9]+$ ]] || ((prefix > 128)) ||
+            [[ ! "$addr" =~ ^[0-9a-fA-F:]+$ ]] || [[ "$addr" != *:* ]]; then
             test_pass "IPv6 invalid rejected: $cidr"
         else
             test_fail "IPv6 should be invalid: $cidr"
@@ -185,7 +188,7 @@ test_config_parsing() {
     tmp_conf=$(mktemp /tmp/split_tunnel_test.XXXXXX)
     trap "rm -f '$tmp_conf'" RETURN
 
-    cat > "$tmp_conf" << 'EOF'
+    cat >"$tmp_conf" <<'EOF'
 # Test config
 TUNNEL_MODE="bypass"
 BYPASS_SUBNETS=("192.168.1.0/24" "10.0.0.0/8")
@@ -262,7 +265,7 @@ run_integration_tests() {
     local tmp_conf
     tmp_conf=$(mktemp /tmp/split_tunnel_int_test.XXXXXX)
 
-    cat > "$tmp_conf" << 'EOF'
+    cat >"$tmp_conf" <<'EOF'
 TUNNEL_MODE="bypass"
 BYPASS_SUBNETS=("198.51.100.0/24")
 BYPASS_SUBNETS_V6=()
@@ -325,8 +328,8 @@ main() {
     local target="${1:-all}"
 
     case "$target" in
-        lint)        run_lint_tests ;;
-        unit)        run_unit_tests ;;
+        lint) run_lint_tests ;;
+        unit) run_unit_tests ;;
         integration) run_integration_tests ;;
         all)
             run_lint_tests

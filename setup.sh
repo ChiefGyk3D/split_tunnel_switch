@@ -40,10 +40,10 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-print_info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
-print_error()   { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 print_header() {
     echo ""
@@ -87,10 +87,10 @@ check_prerequisites() {
 
     # Optional dependencies
     command -v iptables &>/dev/null || print_warning "iptables not found (kill switch with iptables backend unavailable)"
-    command -v nft &>/dev/null      || print_info "nft not found (kill switch with nftables backend unavailable)"
+    command -v nft &>/dev/null || print_info "nft not found (kill switch with nftables backend unavailable)"
     command -v notify-send &>/dev/null || print_info "notify-send not found (desktop notifications unavailable)"
-    command -v shellcheck &>/dev/null  || print_info "shellcheck not found (test suite linting unavailable)"
-    command -v gcc &>/dev/null          || print_info "gcc not found (Twingate relay bypass shim build unavailable — install build-essential)"
+    command -v shellcheck &>/dev/null || print_info "shellcheck not found (test suite linting unavailable)"
+    command -v gcc &>/dev/null || print_info "gcc not found (Twingate relay bypass shim build unavailable — install build-essential)"
 
     print_success "Prerequisites check complete"
 }
@@ -117,14 +117,14 @@ validate_ipv4_cidr() {
         return 1
     fi
     local o1="${BASH_REMATCH[1]}" o2="${BASH_REMATCH[2]}" o3="${BASH_REMATCH[3]}" o4="${BASH_REMATCH[4]}" p="${BASH_REMATCH[5]}"
-    (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && p <= 32 )) || return 1
+    ((o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && p <= 32)) || return 1
 }
 
 validate_ipv6_cidr() {
     local cidr="$1"
     [[ "$cidr" == */* ]] || return 1
     local prefix="${cidr##*/}"
-    [[ "$prefix" =~ ^[0-9]+$ ]] && (( prefix <= 128 )) || return 1
+    [[ "$prefix" =~ ^[0-9]+$ ]] && ((prefix <= 128)) || return 1
 }
 
 # ============================================================================
@@ -235,18 +235,21 @@ configure_optional_features() {
     echo ""
 
     # Route metric
-    read -rp "Set route metric/priority? (y/N): " -n 1 choice; echo
+    read -rp "Set route metric/priority? (y/N): " -n 1 choice
+    echo
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         read -rp "  Route metric (0-9999): " metric
         features[ROUTE_METRIC]="$metric"
     fi
 
     # Auto-discover
-    read -rp "Auto-discover local subnets? (y/N): " -n 1 choice; echo
+    read -rp "Auto-discover local subnets? (y/N): " -n 1 choice
+    echo
     [[ "$choice" =~ ^[Yy]$ ]] && features[AUTO_DISCOVER_SUBNETS]="true"
 
     # Connectivity verification
-    read -rp "Verify connectivity after adding routes? (y/N): " -n 1 choice; echo
+    read -rp "Verify connectivity after adding routes? (y/N): " -n 1 choice
+    echo
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         features[VERIFY_CONNECTIVITY]="true"
         echo "  Enter hosts to ping for verification (one per line, Enter to finish):"
@@ -262,15 +265,18 @@ configure_optional_features() {
     fi
 
     # Kill switch
-    read -rp "Enable kill switch (block non-VPN traffic if VPN drops)? (y/N): " -n 1 choice; echo
+    read -rp "Enable kill switch (block non-VPN traffic if VPN drops)? (y/N): " -n 1 choice
+    echo
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         features[KILL_SWITCH]="true"
-        read -rp "  Backend — 1) iptables (default)  2) nftables: " -n 1 ks; echo
+        read -rp "  Backend — 1) iptables (default)  2) nftables: " -n 1 ks
+        echo
         [[ "$ks" == "2" ]] && features[KILL_SWITCH_BACKEND]="nftables"
     fi
 
     # DNS leak prevention
-    read -rp "Enable DNS leak prevention? (y/N): " -n 1 choice; echo
+    read -rp "Enable DNS leak prevention? (y/N): " -n 1 choice
+    echo
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         features[DNS_LEAK_PREVENTION]="true"
         echo "  Enter direct DNS servers (one per line, Enter for gateway auto-detect):"
@@ -286,11 +292,13 @@ configure_optional_features() {
     fi
 
     # VPN-down cleanup
-    read -rp "Remove routes on VPN disconnect? (y/N): " -n 1 choice; echo
+    read -rp "Remove routes on VPN disconnect? (y/N): " -n 1 choice
+    echo
     [[ "$choice" =~ ^[Yy]$ ]] && features[REMOVE_ROUTES_ON_VPN_DOWN]="true"
 
     # Desktop notifications
-    read -rp "Enable desktop notifications? (y/N): " -n 1 choice; echo
+    read -rp "Enable desktop notifications? (y/N): " -n 1 choice
+    echo
     [[ "$choice" =~ ^[Yy]$ ]] && features[DESKTOP_NOTIFICATIONS]="true"
 
     # Return features as declarations
@@ -313,7 +321,7 @@ create_config() {
     print_info "Creating configuration file..."
     mkdir -p "$CONFIG_DIR"
 
-    cat > "$CONFIG_FILE" << INNEREOF
+    cat >"$CONFIG_FILE" <<INNEREOF
 # =============================================================================
 # NetworkManager Split Tunnel Configuration
 # Generated by setup.sh on $(date '+%Y-%m-%d %H:%M:%S')
@@ -345,15 +353,15 @@ INNEREOF
         local key="${feat%%=*}"
         local val="${feat#*=}"
         case "$key" in
-            VERIFY_HOSTS|DIRECT_DNS_SERVERS)
-                echo "" >> "$CONFIG_FILE"
-                echo "# $key" >> "$CONFIG_FILE"
-                echo "${key}=(${val})" >> "$CONFIG_FILE"
+            VERIFY_HOSTS | DIRECT_DNS_SERVERS)
+                echo "" >>"$CONFIG_FILE"
+                echo "# $key" >>"$CONFIG_FILE"
+                echo "${key}=(${val})" >>"$CONFIG_FILE"
                 ;;
             *)
-                echo "" >> "$CONFIG_FILE"
-                echo "# $key" >> "$CONFIG_FILE"
-                echo "${key}=\"${val}\"" >> "$CONFIG_FILE"
+                echo "" >>"$CONFIG_FILE"
+                echo "# $key" >>"$CONFIG_FILE"
+                echo "${key}=\"${val}\"" >>"$CONFIG_FILE"
                 ;;
         esac
     done
@@ -447,7 +455,8 @@ configure_twingate_proxy_setup() {
     echo "  Enable at work with: sudo $INSTALL_PATH twingate-proxy on"
     echo "  Disable at home with: sudo $INSTALL_PATH twingate-proxy off"
     echo ""
-    read -rp "Set up Twingate relay bypass support? (y/N): " -n 1 choice; echo
+    read -rp "Set up Twingate relay bypass support? (y/N): " -n 1 choice
+    echo
     [[ ! "$choice" =~ ^[Yy]$ ]] && return 0
 
     if ! command -v gcc &>/dev/null; then
@@ -462,7 +471,7 @@ configure_twingate_proxy_setup() {
             if grep -q '^TWINGATE_PROXY_MODE=' "$CONFIG_FILE" 2>/dev/null; then
                 sed -i 's|^TWINGATE_PROXY_MODE=.*|TWINGATE_PROXY_MODE="off"|' "$CONFIG_FILE"
             else
-                printf '\n# Twingate relay bypass (toggle with: twingate-proxy on|off)\nTWINGATE_PROXY_MODE="off"\nTWINGATE_PROXY_PORT="8888"\n' >> "$CONFIG_FILE"
+                printf '\n# Twingate relay bypass (toggle with: twingate-proxy on|off)\nTWINGATE_PROXY_MODE="off"\nTWINGATE_PROXY_PORT="8888"\n' >>"$CONFIG_FILE"
             fi
         fi
         echo ""
@@ -478,7 +487,7 @@ configure_twingate_proxy_setup() {
 # ============================================================================
 install_aliases() {
     print_info "Installing shell aliases to $ALIASES_FILE ..."
-    cat > "$ALIASES_FILE" << 'ALIASEOF'
+    cat >"$ALIASES_FILE" <<'ALIASEOF'
 # split_tunnel_switch — convenience aliases
 # Installed by setup.sh. Remove this file to uninstall.
 
@@ -590,7 +599,8 @@ uninstall() {
         print_success "Removed Twingate relay bypass drop-in"
     fi
     if [[ -f "$TWINGATE_SHIM_DST" ]]; then
-        read -rp "Remove Twingate shim ($TWINGATE_SHIM_DST)? (y/n): " -n 1; echo
+        read -rp "Remove Twingate shim ($TWINGATE_SHIM_DST)? (y/n): " -n 1
+        echo
         [[ $REPLY =~ ^[Yy]$ ]] && rm -f "$TWINGATE_SHIM_DST" && print_success "Removed Twingate shim"
     fi
 
@@ -672,7 +682,8 @@ interactive_install() {
     configure_twingate_proxy_setup
 
     echo ""
-    read -rp "Install shell aliases (twingate-work/twingate-home/st-status etc.)? (y/N): " -n 1; echo
+    read -rp "Install shell aliases (twingate-work/twingate-home/st-status etc.)? (y/N): " -n 1
+    echo
     [[ $REPLY =~ ^[Yy]$ ]] && install_aliases
 
     echo ""
@@ -750,18 +761,45 @@ show_menu() {
 
     case $REPLY in
         1) interactive_install ;;
-        2) check_root; quick_install ;;
-        3) check_root; uninstall ;;
+        2)
+            check_root
+            quick_install
+            ;;
+        3)
+            check_root
+            uninstall
+            ;;
         4) show_status ;;
-        5) check_root; [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed" ;;
-        6) check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed" ;;
-        7) check_root; [[ -x "$INSTALL_PATH" ]] && apply_routes || print_error "Not installed" ;;
-        8) check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" remove || print_error "Not installed" ;;
+        5)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed"
+            ;;
+        6)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed"
+            ;;
+        7)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && apply_routes || print_error "Not installed"
+            ;;
+        8)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" remove || print_error "Not installed"
+            ;;
         9) run_tests ;;
-        t|T) check_root; build_twingate_shim ;;
-        a|A) check_root; install_aliases ;;
+        t | T)
+            check_root
+            build_twingate_shim
+            ;;
+        a | A)
+            check_root
+            install_aliases
+            ;;
         0) exit 0 ;;
-        *) print_error "Invalid option"; exit 1 ;;
+        *)
+            print_error "Invalid option"
+            exit 1
+            ;;
     esac
 }
 
@@ -772,15 +810,36 @@ if [[ $# -eq 0 ]]; then
     show_menu
 else
     case "$1" in
-        install)          check_root; interactive_install ;;
-        quick-install)    check_root; quick_install ;;
-        uninstall)        check_root; uninstall ;;
-        status)           show_status ;;
-        validate)         check_root; [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed" ;;
-        test)             check_root; [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed" ;;
-        run-tests)        run_tests ;;
-        build-shim)       check_root; build_twingate_shim ;;
-        install-aliases)  check_root; install_aliases ;;
+        install)
+            check_root
+            interactive_install
+            ;;
+        quick-install)
+            check_root
+            quick_install
+            ;;
+        uninstall)
+            check_root
+            uninstall
+            ;;
+        status) show_status ;;
+        validate)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && validate_installation || print_error "Not installed"
+            ;;
+        test)
+            check_root
+            [[ -x "$INSTALL_PATH" ]] && "$INSTALL_PATH" test -v || print_error "Not installed"
+            ;;
+        run-tests) run_tests ;;
+        build-shim)
+            check_root
+            build_twingate_shim
+            ;;
+        install-aliases)
+            check_root
+            install_aliases
+            ;;
         twingate-proxy)
             check_root
             if [[ -z "${2:-}" ]]; then
