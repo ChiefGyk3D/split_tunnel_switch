@@ -74,7 +74,7 @@ AUTO_DISCOVER_SUBNETS="false"
 
 # --- Kill switch ---
 KILL_SWITCH="false"
-KILL_SWITCH_BACKEND="iptables"   # "iptables" or "nftables"
+KILL_SWITCH_BACKEND="iptables" # "iptables" or "nftables"
 
 # --- DNS leak prevention ---
 DNS_LEAK_PREVENTION="false"
@@ -87,8 +87,8 @@ REMOVE_ROUTES_ON_VPN_DOWN="false"
 DESKTOP_NOTIFICATIONS="false"
 
 # --- Twingate proxy ---
-TWINGATE_PROXY_MODE="off"       # "on" = relay bypass via LD_PRELOAD (work WiFi); "off" = direct
-TWINGATE_PROXY_PORT="8888"      # (reserved - tinyproxy port, no longer used for relay bypass)
+TWINGATE_PROXY_MODE="off"  # "on" = relay bypass via LD_PRELOAD (work WiFi); "off" = direct
+TWINGATE_PROXY_PORT="8888" # (reserved - tinyproxy port, no longer used for relay bypass)
 
 # --- Fallback DNS for ProtonVPN leak-protection interfaces ---
 # DNS servers assigned to ipv6leakintrf0/pvpnksintrf0 when they come up with
@@ -126,13 +126,13 @@ log_message() {
     # Write to log file
     if [[ "$ENABLE_LOGGING" == "true" ]]; then
         if [[ -w "$LOG_FILE" ]] || [[ ! -e "$LOG_FILE" && -w "$(dirname "$LOG_FILE")" ]]; then
-            echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
+            echo "[$timestamp] [$level] $message" >>"$LOG_FILE" 2>/dev/null || true
         fi
     fi
 
     # Terminal output
     case "$level" in
-        ERROR)   echo -e "${RED}[ERROR]${NC} $message" >&2 ;;
+        ERROR) echo -e "${RED}[ERROR]${NC} $message" >&2 ;;
         SUCCESS) echo -e "${GREEN}[SUCCESS]${NC} $message" ;;
         WARNING) echo -e "${YELLOW}[WARNING]${NC} $message" ;;
         DEBUG)
@@ -140,7 +140,7 @@ log_message() {
                 echo -e "${CYAN}[DEBUG]${NC} $message"
             fi
             ;;
-        *)       echo -e "[INFO] $message" ;;
+        *) echo -e "[INFO] $message" ;;
     esac
 }
 
@@ -231,7 +231,7 @@ load_config() {
         else
             log_message "DEBUG" "Ignoring unparseable config line $line_num: $line"
         fi
-    done < "$CONFIG_FILE"
+    done <"$CONFIG_FILE"
 
     # Backwards compatibility: single VPN_INTERFACE -> VPN_INTERFACES array
     if [[ -n "${VPN_INTERFACE:-}" ]]; then
@@ -246,23 +246,23 @@ _assign_scalar() {
     local value="$2"
 
     case "$key" in
-        TUNNEL_MODE)            TUNNEL_MODE="$value" ;;
-        VPN_INTERFACE)          VPN_INTERFACE="$value" ;;
-        ENABLE_LOGGING)         ENABLE_LOGGING="$value" ;;
-        LOG_FILE)               LOG_FILE="$value" ;;
-        VERBOSE)                VERBOSE="$value" ;;
-        DRY_RUN)                DRY_RUN="$value" ;;
-        LOCK_FILE)              LOCK_FILE="$value" ;;
-        ROUTE_METRIC)           ROUTE_METRIC="$value" ;;
-        VERIFY_CONNECTIVITY)    VERIFY_CONNECTIVITY="$value" ;;
-        AUTO_DISCOVER_SUBNETS)  AUTO_DISCOVER_SUBNETS="$value" ;;
-        KILL_SWITCH)            KILL_SWITCH="$value" ;;
-        KILL_SWITCH_BACKEND)    KILL_SWITCH_BACKEND="$value" ;;
-        DNS_LEAK_PREVENTION)    DNS_LEAK_PREVENTION="$value" ;;
+        TUNNEL_MODE) TUNNEL_MODE="$value" ;;
+        VPN_INTERFACE) VPN_INTERFACE="$value" ;;
+        ENABLE_LOGGING) ENABLE_LOGGING="$value" ;;
+        LOG_FILE) LOG_FILE="$value" ;;
+        VERBOSE) VERBOSE="$value" ;;
+        DRY_RUN) DRY_RUN="$value" ;;
+        LOCK_FILE) LOCK_FILE="$value" ;;
+        ROUTE_METRIC) ROUTE_METRIC="$value" ;;
+        VERIFY_CONNECTIVITY) VERIFY_CONNECTIVITY="$value" ;;
+        AUTO_DISCOVER_SUBNETS) AUTO_DISCOVER_SUBNETS="$value" ;;
+        KILL_SWITCH) KILL_SWITCH="$value" ;;
+        KILL_SWITCH_BACKEND) KILL_SWITCH_BACKEND="$value" ;;
+        DNS_LEAK_PREVENTION) DNS_LEAK_PREVENTION="$value" ;;
         REMOVE_ROUTES_ON_VPN_DOWN) REMOVE_ROUTES_ON_VPN_DOWN="$value" ;;
-        DESKTOP_NOTIFICATIONS)  DESKTOP_NOTIFICATIONS="$value" ;;
-        TWINGATE_PROXY_MODE)    TWINGATE_PROXY_MODE="$value" ;;
-        TWINGATE_PROXY_PORT)    TWINGATE_PROXY_PORT="$value" ;;
+        DESKTOP_NOTIFICATIONS) DESKTOP_NOTIFICATIONS="$value" ;;
+        TWINGATE_PROXY_MODE) TWINGATE_PROXY_MODE="$value" ;;
+        TWINGATE_PROXY_PORT) TWINGATE_PROXY_PORT="$value" ;;
         *)
             log_message "DEBUG" "Ignoring unknown config key: $key"
             ;;
@@ -276,11 +276,11 @@ _assign_array() {
     local values=("$@")
 
     case "$key" in
-        BYPASS_SUBNETS)       BYPASS_SUBNETS=("${values[@]}") ;;
-        BYPASS_SUBNETS_V6)    BYPASS_SUBNETS_V6=("${values[@]}") ;;
-        VPN_INTERFACES)       VPN_INTERFACES=("${values[@]}") ;;
-        VERIFY_HOSTS)         VERIFY_HOSTS=("${values[@]}") ;;
-        DIRECT_DNS_SERVERS)   DIRECT_DNS_SERVERS=("${values[@]}") ;;
+        BYPASS_SUBNETS) BYPASS_SUBNETS=("${values[@]}") ;;
+        BYPASS_SUBNETS_V6) BYPASS_SUBNETS_V6=("${values[@]}") ;;
+        VPN_INTERFACES) VPN_INTERFACES=("${values[@]}") ;;
+        VERIFY_HOSTS) VERIFY_HOSTS=("${values[@]}") ;;
+        DIRECT_DNS_SERVERS) DIRECT_DNS_SERVERS=("${values[@]}") ;;
         FALLBACK_DNS_SERVERS) FALLBACK_DNS_SERVERS=("${values[@]}") ;;
         *)
             log_message "DEBUG" "Ignoring unknown config array: $key"
@@ -299,7 +299,7 @@ validate_ipv4_cidr() {
         return 1
     fi
     local o1="${BASH_REMATCH[1]}" o2="${BASH_REMATCH[2]}" o3="${BASH_REMATCH[3]}" o4="${BASH_REMATCH[4]}" prefix="${BASH_REMATCH[5]}"
-    (( o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && prefix <= 32 )) || return 1
+    ((o1 <= 255 && o2 <= 255 && o3 <= 255 && o4 <= 255 && prefix <= 32)) || return 1
     return 0
 }
 
@@ -310,15 +310,15 @@ validate_ipv6_cidr() {
     [[ "$cidr" == */* ]] || return 1
     local addr="${cidr%/*}"
     local prefix="${cidr##*/}"
-    [[ "$prefix" =~ ^[0-9]+$ ]] && (( prefix <= 128 )) || return 1
+    [[ "$prefix" =~ ^[0-9]+$ ]] && ((prefix <= 128)) || return 1
     # Validate the address portion: must only contain hex digits and colons,
     # must contain at least one colon, and not start/end with a single colon
     # (double colon :: is allowed at start/end)
     [[ "$addr" =~ ^[0-9a-fA-F:]+$ ]] || return 1
     [[ "$addr" == *:* ]] || return 1
     # Reject more than one :: group
-    local double_colons="${addr//[^:]}"
-    local compressed="${addr//::}"
+    local double_colons="${addr//[^:]/}"
+    local compressed="${addr//::/}"
     if [[ "$addr" == *::*::* ]]; then
         return 1
     fi
@@ -383,7 +383,7 @@ validate_config() {
 
     # Route metric
     if [[ -n "$ROUTE_METRIC" ]]; then
-        if [[ "$ROUTE_METRIC" =~ ^[0-9]+$ ]] && (( ROUTE_METRIC >= 0 && ROUTE_METRIC <= 9999 )); then
+        if [[ "$ROUTE_METRIC" =~ ^[0-9]+$ ]] && ((ROUTE_METRIC >= 0 && ROUTE_METRIC <= 9999)); then
             log_message "SUCCESS" "ROUTE_METRIC: $ROUTE_METRIC"
         else
             log_message "ERROR" "ROUTE_METRIC must be a number 0-9999, got: '$ROUTE_METRIC'"
@@ -459,7 +459,7 @@ acquire_lock() {
             rm -f "$LOCK_FILE"
         fi
     fi
-    echo $$ > "$LOCK_FILE"
+    echo $$ >"$LOCK_FILE"
 }
 
 release_lock() {
@@ -601,7 +601,7 @@ add_routes_v4() {
         return 1
     fi
 
-    read -r default_route default_interface <<< "$route_info"
+    read -r default_route default_interface <<<"$route_info"
     log_message "INFO" "IPv4 gateway: $default_route via $default_interface"
 
     local metric_arg=""
@@ -701,7 +701,7 @@ add_routes_v6() {
         return 0
     fi
 
-    read -r default_route default_interface <<< "$route_info"
+    read -r default_route default_interface <<<"$route_info"
     log_message "INFO" "IPv6 gateway: $default_route via $default_interface"
 
     local metric_arg=""
@@ -846,7 +846,7 @@ setup_dns_leak_prevention() {
         log_message "WARNING" "Cannot set up DNS leak prevention -- no default route found"
         return 0
     fi
-    read -r default_route default_interface <<< "$route_info"
+    read -r default_route default_interface <<<"$route_info"
 
     # If no explicit DNS servers, use the gateway
     local dns_servers=("${DIRECT_DNS_SERVERS[@]+"${DIRECT_DNS_SERVERS[@]}"}")
@@ -889,7 +889,7 @@ remove_dns_leak_prevention() {
     local dns_servers=("${DIRECT_DNS_SERVERS[@]+"${DIRECT_DNS_SERVERS[@]}"}")
     if route_info=$(get_default_route); then
         local default_route
-        read -r default_route _ <<< "$route_info"
+        read -r default_route _ <<<"$route_info"
         if [[ ${#dns_servers[@]} -eq 0 ]]; then
             dns_servers=("$default_route")
         fi
@@ -1067,7 +1067,7 @@ verify_connectivity() {
     if [[ ${#hosts[@]} -eq 0 ]]; then
         if route_info=$(get_default_route); then
             local gw
-            read -r gw _ <<< "$route_info"
+            read -r gw _ <<<"$route_info"
             hosts=("$gw")
         fi
     fi
@@ -1129,9 +1129,9 @@ add_routes() {
         local end_time duration_ms
         end_time=$(date +%s%N 2>/dev/null || date +%s)
         if [[ ${#start_time} -gt 10 && ${#end_time} -gt 10 ]]; then
-            duration_ms=$(( (end_time - start_time) / 1000000 ))
+            duration_ms=$(((end_time - start_time) / 1000000))
         else
-            duration_ms=$(( (end_time - start_time) * 1000 ))
+            duration_ms=$(((end_time - start_time) * 1000))
         fi
         log_message "SUCCESS" "Split tunneling is now active (mode: $TUNNEL_MODE) [${duration_ms}ms]"
         send_notification "Split Tunnel Active" "Routes configured in $TUNNEL_MODE mode"
@@ -1186,13 +1186,13 @@ configure_twingate_proxy() {
         on)
             if [[ ! -f "$so_path" ]]; then
                 log_message "ERROR" "LD_PRELOAD library not found: $so_path"
-                log_message "INFO"  "Build it with: gcc -shared -fPIC -o $so_path \\"
-                log_message "INFO"  "    /home/chiefgyk3d/src/split_tunnel_switch/src/twingate_no_binddev.c -ldl"
+                log_message "INFO" "Build it with: gcc -shared -fPIC -o $so_path \\"
+                log_message "INFO" "    /home/chiefgyk3d/src/split_tunnel_switch/src/twingate_no_binddev.c -ldl"
                 return 1
             fi
             log_message "INFO" "Enabling Twingate relay bypass via LD_PRELOAD (no SO_BINDTODEVICE)"
             mkdir -p "$drop_in_dir"
-            printf '[Service]\nEnvironment=LD_PRELOAD=%s\n' "$so_path" > "$drop_in_file"
+            printf '[Service]\nEnvironment=LD_PRELOAD=%s\n' "$so_path" >"$drop_in_file"
             systemctl daemon-reload 2>/dev/null || true
             if systemctl restart twingate.service 2>/dev/null; then
                 log_message "SUCCESS" "Twingate relay bypass enabled — relay traffic routes via ProtonVPN"
@@ -1252,14 +1252,14 @@ show_status() {
     echo -e "${BOLD}Default Routes:${NC}"
     if route_info=$(get_default_route); then
         local gw iface
-        read -r gw iface <<< "$route_info"
+        read -r gw iface <<<"$route_info"
         echo -e "  IPv4: $gw via $iface"
     else
         echo -e "  IPv4: ${YELLOW}No non-VPN default route${NC}"
     fi
     if route_info=$(get_default_route_v6); then
         local gw iface
-        read -r gw iface <<< "$route_info"
+        read -r gw iface <<<"$route_info"
         echo -e "  IPv6: $gw via $iface"
     else
         echo -e "  IPv6: ${YELLOW}No non-VPN default route${NC}"
@@ -1344,7 +1344,7 @@ show_status() {
 # USAGE
 # ============================================================================
 usage() {
-    cat << EOF
+    cat <<EOF
 NetworkManager Split Tunnel Script v${VERSION}
 
 USAGE:
@@ -1401,11 +1401,11 @@ main() {
     local args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -v|--verbose)
+            -v | --verbose)
                 VERBOSE="true"
                 shift
                 ;;
-            -c|--config)
+            -c | --config)
                 if [[ -n "${2:-}" ]]; then
                     CONFIG_FILE="$2"
                     shift 2
@@ -1414,7 +1414,7 @@ main() {
                     exit 1
                 fi
                 ;;
-            -n|--dry-run)
+            -n | --dry-run)
                 DRY_RUN="true"
                 shift
                 ;;
@@ -1495,10 +1495,10 @@ main() {
             fi
             configure_twingate_proxy "$new_mode"
             ;;
-        version|--version)
+        version | --version)
             echo "split_tunnel v${VERSION}"
             ;;
-        help|--help|-h)
+        help | --help | -h)
             usage
             ;;
         *)
@@ -1527,15 +1527,15 @@ if [[ $# -ge 2 ]] && [[ ! "$1" =~ ^($KNOWN_COMMANDS)$ ]] && [[ ! "$1" =~ ^- ]]; 
     # These interfaces are created by ProtonVPN for IPv6 leak prevention; they
     # intentionally have no DNS assigned, which causes Twingate's sdwan_network_set
     # to log "no usable DNS servers" and break the relay connection.
-    if [[ "$NM_ACTION" == "up" ]] && \
-       [[ "$NM_INTERFACE" =~ ^(ipv6leakintrf0|pvpnksintrf0)$ ]] && \
-       command -v resolvectl >/dev/null 2>&1; then
+    if [[ "$NM_ACTION" == "up" ]] &&
+        [[ "$NM_INTERFACE" =~ ^(ipv6leakintrf0|pvpnksintrf0)$ ]] &&
+        command -v resolvectl >/dev/null 2>&1; then
         resolvectl dns "$NM_INTERFACE" "${FALLBACK_DNS_SERVERS[@]}" 2>/dev/null || true
         log_message "INFO" "Set fallback DNS (${FALLBACK_DNS_SERVERS[*]}) on $NM_INTERFACE for Twingate/ProtonVPN coexistence"
     fi
 
     case "$NM_ACTION" in
-        up|vpn-up)
+        up | vpn-up)
             log_message "INFO" "NetworkManager event: $NM_ACTION on $NM_INTERFACE"
 
             # Cooldown: skip if same event was processed recently (within 5s)
@@ -1543,17 +1543,17 @@ if [[ $# -ge 2 ]] && [[ ! "$1" =~ ^($KNOWN_COMMANDS)$ ]] && [[ ! "$1" =~ ^- ]]; 
             if [[ -f "$cooldown_file" ]]; then
                 last_run=$(cat "$cooldown_file" 2>/dev/null) || last_run=0
                 now=$(date +%s)
-                if (( now - last_run < 5 )); then
+                if ((now - last_run < 5)); then
                     log_message "DEBUG" "Cooldown active, skipping duplicate $NM_ACTION event"
                     exit 0
                 fi
             fi
-            date +%s > "$cooldown_file" 2>/dev/null || true
+            date +%s >"$cooldown_file" 2>/dev/null || true
 
             acquire_lock
             add_routes
             ;;
-        down|vpn-down)
+        down | vpn-down)
             log_message "INFO" "NetworkManager event: $NM_ACTION on $NM_INTERFACE"
             if [[ "$REMOVE_ROUTES_ON_VPN_DOWN" == "true" ]]; then
                 acquire_lock
